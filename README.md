@@ -19,8 +19,21 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 
 ## Installation
 
-1. Télécharger `WinPiBooster.exe` depuis la [dernière release](https://github.com/boomboxOff/WinPiBooster/releases/latest)
-2. Placer `WinPiBooster.exe` dans le dossier du projet (à côté de `WinPiBooster.bat`)
+1. Cloner ce dépôt :
+   ```bat
+   git clone https://github.com/boomboxOff/WinPiBooster.git
+   ```
+2. Télécharger `WinPiBooster.exe` depuis la [dernière release](https://github.com/boomboxOff/WinPiBooster/releases/latest) et le placer dans le dossier `WinPiBooster\`
+
+Le dossier doit ressembler à ceci :
+```
+WinPiBooster\
+  WinPiBooster.exe   ← téléchargé depuis la release
+  WinPiBooster.bat
+  setup.bat
+  README.md
+  v2\
+```
 
 ## Lancement
 
