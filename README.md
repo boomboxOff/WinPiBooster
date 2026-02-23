@@ -44,6 +44,12 @@ Pour que le script se lance automatiquement à chaque démarrage Windows :
 
 Le Planificateur de tâches Windows lancera le script au démarrage avec les droits SYSTEM.
 
+Pour désinstaller la tâche, depuis un terminal en administrateur :
+
+```bat
+schtasks /delete /tn MajWindowsJs /f
+```
+
 ## Logs
 
 Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog_<timestamp>.txt` à chaque lancement. Les archives de plus de 30 jours sont supprimées automatiquement.

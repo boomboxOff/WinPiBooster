@@ -14,9 +14,11 @@ if %errorlevel% equ 0 (
     schtasks /delete /tn "%TASK_NAME%" /f
 )
 
-schtasks /create /tn "%TASK_NAME%" /tr "\"%BAT_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f
+powershell -ExecutionPolicy Bypass -Command "$action = New-ScheduledTaskAction -Execute '\"%~dp0WindowsMAJ.bat\"'; $trigger = New-ScheduledTaskTrigger -AtStartup; $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1); $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest; Register-ScheduledTask -TaskName '%TASK_NAME%' -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null"
+
 if %errorlevel% equ 0 (
-    echo Tache '%TASK_NAME%' enregistree. Le script demarrera automatiquement a chaque demarrage de Windows.
+    echo Tache '%TASK_NAME%' enregistree avec redemarrage automatique en cas de crash.
+    echo Le script demarrera automatiquement a chaque demarrage de Windows.
 ) else (
     echo Erreur lors de l'enregistrement de la tache.
 )
