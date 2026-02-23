@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -127,6 +129,96 @@ func TestUpdateJSON_SingleWrappedAsArray(t *testing.T) {
 	}
 	if updates[0].KB() != "9999" {
 		t.Errorf("KB() = %q, want %q", updates[0].KB(), "9999")
+	}
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+func TestDefaults(t *testing.T) {
+	cfg := defaults()
+	if cfg.CheckIntervalSeconds != 60 {
+		t.Errorf("CheckIntervalSeconds = %d, want 60", cfg.CheckIntervalSeconds)
+	}
+	if cfg.RetryAttempts != 3 {
+		t.Errorf("RetryAttempts = %d, want 3", cfg.RetryAttempts)
+	}
+	if cfg.LogRetentionDays != 30 {
+		t.Errorf("LogRetentionDays = %d, want 30", cfg.LogRetentionDays)
+	}
+}
+
+func TestConfigCheckInterval(t *testing.T) {
+	cfg := Config{CheckIntervalSeconds: 60}
+	if got := cfg.CheckInterval(); got != 60*time.Second {
+		t.Errorf("CheckInterval() = %v, want 60s", got)
+	}
+	cfg2 := Config{CheckIntervalSeconds: 300}
+	if got := cfg2.CheckInterval(); got != 300*time.Second {
+		t.Errorf("CheckInterval() = %v, want 300s", got)
+	}
+}
+
+func cfgPath(t *testing.T) string {
+	t.Helper()
+	exePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	return filepath.Join(filepath.Dir(exePath), "config.json")
+}
+
+func TestLoadConfig_Absent(t *testing.T) {
+	p := cfgPath(t)
+	os.Remove(p) // ensure absent; ignore error if already missing
+
+	cfg := loadConfig()
+	d := defaults()
+	if cfg.CheckIntervalSeconds != d.CheckIntervalSeconds {
+		t.Errorf("CheckIntervalSeconds = %d, want %d", cfg.CheckIntervalSeconds, d.CheckIntervalSeconds)
+	}
+	if cfg.RetryAttempts != d.RetryAttempts {
+		t.Errorf("RetryAttempts = %d, want %d", cfg.RetryAttempts, d.RetryAttempts)
+	}
+	if cfg.LogRetentionDays != d.LogRetentionDays {
+		t.Errorf("LogRetentionDays = %d, want %d", cfg.LogRetentionDays, d.LogRetentionDays)
+	}
+}
+
+func TestLoadConfig_Partial(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+
+	if err := os.WriteFile(p, []byte(`{"check_interval_seconds": 120}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg := loadConfig()
+	if cfg.CheckIntervalSeconds != 120 {
+		t.Errorf("CheckIntervalSeconds = %d, want 120", cfg.CheckIntervalSeconds)
+	}
+	if cfg.RetryAttempts != 3 {
+		t.Errorf("RetryAttempts = %d, want 3 (default)", cfg.RetryAttempts)
+	}
+	if cfg.LogRetentionDays != 30 {
+		t.Errorf("LogRetentionDays = %d, want 30 (default)", cfg.LogRetentionDays)
+	}
+}
+
+func TestLoadConfig_Invalid(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+
+	if err := os.WriteFile(p, []byte(`not valid json`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg := loadConfig()
+	d := defaults()
+	if cfg.CheckIntervalSeconds != d.CheckIntervalSeconds {
+		t.Errorf("CheckIntervalSeconds = %d, want %d (default)", cfg.CheckIntervalSeconds, d.CheckIntervalSeconds)
+	}
+	if cfg.RetryAttempts != d.RetryAttempts {
+		t.Errorf("RetryAttempts = %d, want %d (default)", cfg.RetryAttempts, d.RetryAttempts)
 	}
 }
 
