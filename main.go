@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,6 +16,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/toast.v1"
+)
+
+// Timeouts for child process execution
+const (
+	cmdTimeout  = 5 * time.Minute  // sc, net session, sc start
+	psTimeout   = 10 * time.Minute // PowerShell (Get/Install-WindowsUpdate can be slow)
 )
 
 // ─── Globals ──────────────────────────────────────────────────────────────────
@@ -69,19 +76,20 @@ func (u Update) Computer() string {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// newCmd creates an exec.Cmd with CREATE_NEW_PROCESS_GROUP so that Ctrl+C
-// is not forwarded to child processes, allowing our signal handler to run cleanly.
-func newCmd(name string, args ...string) *exec.Cmd {
-	c := exec.Command(name, args...)
+// newCmdCtx creates an exec.Cmd with a context and CREATE_NEW_PROCESS_GROUP.
+func newCmdCtx(ctx context.Context, name string, args ...string) *exec.Cmd {
+	c := exec.CommandContext(ctx, name, args...)
 	c.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 	}
 	return c
 }
 
-// execCommand runs a shell command through cmd /C and returns trimmed stdout.
+// execCommand runs a shell command through cmd /C with a timeout.
 func execCommand(cmd string) (string, error) {
-	out, err := newCmd("cmd", "/C", cmd).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	defer cancel()
+	out, err := newCmdCtx(ctx, "cmd", "/C", cmd).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
@@ -91,13 +99,15 @@ func execCommand(cmd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// execPS runs a PowerShell command with UTF-8 encoding enforced.
+// execPS runs a PowerShell command with UTF-8 encoding enforced and a timeout.
 func execPS(psCmd string) (string, error) {
 	full := fmt.Sprintf(
 		`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; %s`,
 		psCmd,
 	)
-	out, err := newCmd("powershell.exe", "-NoProfile", "-Command", full).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), psTimeout)
+	defer cancel()
+	out, err := newCmdCtx(ctx, "powershell.exe", "-NoProfile", "-Command", full).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
