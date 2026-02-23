@@ -34,6 +34,7 @@ var (
 	log           *logrus.Logger
 	logHook       *fileHook
 	logDir        string // directory of the executable
+	cfg           Config
 
 	// Counters (atomic)
 	updatesChecked   int64
@@ -302,7 +303,11 @@ func archiveOldLogs() {
 }
 
 func cleanOldLogs() {
-	cutoff := time.Now().AddDate(0, 0, -30)
+	days := cfg.LogRetentionDays
+	if days <= 0 {
+		days = 30
+	}
+	cutoff := time.Now().AddDate(0, 0, -days)
 	entries, err := os.ReadDir(logDir)
 	if err != nil {
 		log.Warnf("cleanOldLogs: cannot read dir: %v", err)
@@ -400,6 +405,13 @@ func retryBackoff(name string, maxAttempts int, backoffDelays []time.Duration, f
 
 var defaultBackoff = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second}
 
+func retryAttempts() int {
+	if cfg.RetryAttempts > 0 {
+		return cfg.RetryAttempts
+	}
+	return 3
+}
+
 // ─── Main cycle ───────────────────────────────────────────────────────────────
 
 func runCycle() {
@@ -412,13 +424,13 @@ func runCycle() {
 
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
-	if err := retryBackoff("installPSWindowsUpdateModule", 3, defaultBackoff, installPSWindowsUpdateModule); err != nil {
+	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff, installPSWindowsUpdateModule); err != nil {
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
-	if err := retryBackoff("ensureWindowsUpdateServiceRunning", 3, defaultBackoff, ensureWindowsUpdateServiceRunning); err != nil {
+	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff, ensureWindowsUpdateServiceRunning); err != nil {
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
@@ -431,7 +443,7 @@ func runCycle() {
 	}
 
 	if len(updates) > 0 {
-		err := retryBackoff("installUpdates", 3, defaultBackoff, func() error {
+		err := retryBackoff("installUpdates", retryAttempts(), defaultBackoff, func() error {
 			return installUpdates(updates)
 		})
 		if err != nil {
@@ -453,8 +465,17 @@ func initLogger() error {
 	}
 	logDir = filepath.Dir(exePath)
 
+	// Load config before logger so warnings can be logged
 	log, logHook, err = setupLogger()
-	return err
+	if err != nil {
+		return err
+	}
+	cfg = loadConfig()
+	if cfg != defaults() {
+		log.Debugf("Configuration chargée depuis config.json : interval=%ds retries=%d retention=%dj",
+			cfg.CheckIntervalSeconds, cfg.RetryAttempts, cfg.LogRetentionDays)
+	}
+	return nil
 }
 
 // runInteractive runs the update loop in console mode (SIGINT/SIGTERM aware).
@@ -478,7 +499,7 @@ func runInteractive() {
 	scheduleDailyReport()
 	go runCycle()
 
-	cycleTicker := time.NewTicker(60 * time.Second)
+	cycleTicker := time.NewTicker(cfg.CheckInterval())
 	go func() {
 		for range cycleTicker.C {
 			log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")

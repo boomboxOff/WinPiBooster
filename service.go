@@ -25,7 +25,7 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 
 	// Start the update loop in background
 	heartbeatTicker := time.NewTicker(time.Hour)
-	cycleTicker := time.NewTicker(60 * time.Second)
+	cycleTicker := time.NewTicker(cfg.CheckInterval())
 
 	archiveOldLogs()
 	heartbeat()
