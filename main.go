@@ -308,6 +308,12 @@ func archiveOldLogs() {
 }
 
 func cleanOldLogs() {
+	cleanOldLogsVerbose(false)
+}
+
+// cleanOldLogsVerbose removes log archives older than the retention period.
+// If verbose is true, prints a summary to stdout (used by the clean-logs command).
+func cleanOldLogsVerbose(verbose bool) {
 	days := cfg.LogRetentionDays
 	if days <= 0 {
 		days = 30
@@ -315,9 +321,12 @@ func cleanOldLogs() {
 	cutoff := time.Now().AddDate(0, 0, -days)
 	entries, err := os.ReadDir(logDir)
 	if err != nil {
-		log.Warnf("cleanOldLogs: cannot read dir: %v", err)
+		if log != nil {
+			log.Warnf("cleanOldLogs: cannot read dir: %v", err)
+		}
 		return
 	}
+	removed := 0
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -333,11 +342,19 @@ func cleanOldLogs() {
 		if info.ModTime().Before(cutoff) {
 			fullPath := filepath.Join(logDir, name)
 			if err := os.Remove(fullPath); err != nil {
-				log.Warnf("cleanOldLogs: cannot remove %s: %v", name, err)
+				if log != nil {
+					log.Warnf("cleanOldLogs: cannot remove %s: %v", name, err)
+				}
 			} else {
-				log.Debugf("Ancien journal supprimé : %s", name)
+				if log != nil {
+					log.Debugf("Ancien journal supprimé : %s", name)
+				}
+				removed++
 			}
 		}
+	}
+	if verbose {
+		fmt.Printf("Suppression des archives de plus de %d jours...\n%d archive(s) supprimée(s).\n", days, removed)
 	}
 }
 
@@ -731,6 +748,7 @@ Usage:
   WinPiBooster.exe stop              Arrête le service
   WinPiBooster.exe remove            Désinstalle le service
   WinPiBooster.exe status            Affiche l'état du service
+  WinPiBooster.exe clean-logs        Supprime les archives de logs expirées
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe version           Affiche la version
@@ -812,6 +830,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Erreur:", err)
 			os.Exit(1)
 		}
+	case "clean-logs":
+		cleanOldLogsVerbose(true)
 	case "logs":
 		openLogs()
 	case "report":

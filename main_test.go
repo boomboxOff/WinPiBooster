@@ -566,6 +566,39 @@ func TestDryRunFlagDetection(t *testing.T) {
 	}
 }
 
+// ─── cleanOldLogsVerbose() ────────────────────────────────────────────────────
+
+func TestCleanOldLogsVerbose_RemovesOldArchives(t *testing.T) {
+	dir := t.TempDir()
+	oldDir := logDir
+	logDir = dir
+	defer func() { logDir = oldDir }()
+
+	// Create an old archive (40 days ago) and a recent one (1 day ago).
+	old := filepath.Join(dir, "UpdateLog_old.txt")
+	recent := filepath.Join(dir, "UpdateLog_recent.txt")
+	oldTime := time.Now().AddDate(0, 0, -40)
+
+	if err := os.WriteFile(old, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(old, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(recent, []byte("recent"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanOldLogsVerbose(false)
+
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Error("old archive should have been removed")
+	}
+	if _, err := os.Stat(recent); os.IsNotExist(err) {
+		t.Error("recent archive should still exist")
+	}
+}
+
 // ─── openLogs() ───────────────────────────────────────────────────────────────
 
 func TestOpenLogs_AbsentFile(t *testing.T) {
