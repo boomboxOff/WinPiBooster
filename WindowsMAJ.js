@@ -44,9 +44,9 @@ function showNotification(title, message) {
 // Install NuGet provider if not already installed
 async function installNuGetProvider() {
     try {
-        logger.info("Vérification et installation du fournisseur NuGet...");
+        logger.debug("Vérification et installation du fournisseur NuGet...");
         await execCommand('powershell.exe -Command "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Confirm:$false"');
-        logger.info("Fournisseur NuGet installé avec succès.");
+        logger.debug("Fournisseur NuGet installé avec succès.");
     } catch (error) {
         logger.warn(`Le fournisseur NuGet est peut-être déjà installé : ${error}`);
     }
@@ -68,7 +68,7 @@ async function installPSWindowsUpdateModule() {
     if (psModuleReady) return;
 
     if (await isPSWindowsUpdateModuleInstalled()) {
-        logger.info("Le module PSWindowsUpdate est déjà installé.");
+        logger.debug("Le module PSWindowsUpdate est déjà installé.");
         psModuleReady = true;
     } else {
         try {
@@ -98,7 +98,7 @@ async function ensureWindowsUpdateServiceRunning() {
     try {
         const result = await execCommand('sc query wuauserv');
         if (result.includes('STATE              : 4  RUNNING')) {
-            logger.info("Le service Windows Update est déjà en cours d'exécution.");
+            logger.debug("Le service Windows Update est déjà en cours d'exécution.");
         } else {
             logger.info("Démarrage du service Windows Update...");
             await execCommand('sc start wuauserv');
@@ -113,10 +113,10 @@ async function ensureWindowsUpdateServiceRunning() {
 // Check available updates
 async function checkAvailableUpdates() {
     try {
-        logger.info("Vérification des mises à jour disponibles...");
+        logger.debug("Vérification des mises à jour disponibles...");
         const updatesRaw = await execCommand('powershell.exe -Command "Get-WindowsUpdate -MicrosoftUpdate | ConvertTo-Json -Compress"');
         if (!updatesRaw) {
-            logger.info("Aucune donnée retournée par PowerShell. Aucune mise à jour disponible ou problème détecté.");
+            logger.debug("Aucune donnée retournée par PowerShell. Aucune mise à jour disponible ou problème détecté.");
             updatesSkipped++;
             return [];
         }
@@ -134,7 +134,7 @@ async function checkAvailableUpdates() {
             updatesChecked += updates.length;
             return updates;
         } else {
-            logger.info("Aucune mise à jour disponible.");
+            logger.debug("Aucune mise à jour disponible.");
             updatesSkipped++;
             return [];
         }
@@ -170,7 +170,7 @@ function archiveOldLogs() {
     fs.renameSync(logFile, archiveFile);
     fileTransport = new transports.File({ filename: logFile });
     logger.add(fileTransport);
-    logger.info("Journal archivé.");
+    logger.debug("Journal archivé.");
 }
 
 // Delete log archives older than 30 days (called once a day)
@@ -205,11 +205,11 @@ function generateDailyReport() {
 // Main function to orchestrate the update process
 async function main() {
     if (isRunning) {
-        logger.info("Cycle précédent toujours en cours, passage ignoré.");
+        logger.debug("Cycle précédent toujours en cours, passage ignoré.");
         return;
     }
     isRunning = true;
-    logger.info("Lancement du processus de mise à jour Windows...");
+    logger.debug("Lancement du processus de mise à jour Windows...");
     archiveOldLogs();
 
     try {
@@ -225,7 +225,7 @@ async function main() {
         showNotification("Erreur", "Erreur globale du processus de mise à jour.");
     } finally {
         isRunning = false;
-        logger.info("Processus terminé.");
+        logger.debug("Processus terminé.");
     }
 }
 
@@ -243,7 +243,7 @@ process.on('SIGTERM', () => {
 const checkInterval = 60 * 1000; // Vérification toutes les minutes
 main();
 setInterval(() => {
-    logger.info("Début d'un nouveau cycle de vérification des mises à jour.");
+    logger.debug("Début d'un nouveau cycle de vérification des mises à jour.");
     main();
 }, checkInterval);
 
