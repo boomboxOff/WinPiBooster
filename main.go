@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"gopkg.in/toast.v1"
 )
@@ -634,7 +635,29 @@ func initLogger() error {
 }
 
 // runDryRun performs a single update check without installing anything.
+// acquireSingleInstanceMutex creates a Windows named mutex so that only one
+// interactive or dry-run instance can run at a time.
+// The caller must call windows.CloseHandle(h) when done.
+func acquireSingleInstanceMutex() (windows.Handle, error) {
+	name, err := windows.UTF16PtrFromString("Global\\WinPiBooster")
+	if err != nil {
+		return 0, fmt.Errorf("cannot encode mutex name: %w", err)
+	}
+	h, err := windows.CreateMutex(nil, false, name)
+	if err == windows.ERROR_ALREADY_EXISTS {
+		return 0, fmt.Errorf("une instance de WinPiBooster est déjà en cours d'exécution")
+	}
+	return h, err
+}
+
 func runDryRun() {
+	h, err := acquireSingleInstanceMutex()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Erreur:", err)
+		os.Exit(1)
+	}
+	defer windows.CloseHandle(h)
+
 	if err := checkAdminRights(); err != nil {
 		fmt.Fprintln(os.Stderr, "Droits administrateur requis.")
 		os.Exit(1)
@@ -664,6 +687,13 @@ func runDryRun() {
 
 // runInteractive runs the update loop in console mode (SIGINT/SIGTERM aware).
 func runInteractive() {
+	h, err := acquireSingleInstanceMutex()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Erreur:", err)
+		os.Exit(1)
+	}
+	defer windows.CloseHandle(h)
+
 	if err := checkAdminRights(); err != nil {
 		log.Error("Le script doit être exécuté en tant qu'administrateur. Relancez via WinPiBooster.bat en tant qu'administrateur.")
 		showNotification("Erreur", "Droits administrateur requis. Relancez en tant qu'administrateur.")

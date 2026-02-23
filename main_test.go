@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows"
 )
 
 // ─── Update.KB() ──────────────────────────────────────────────────────────────
@@ -713,6 +714,32 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 		devNull.Close()
 	}()
 	printHelp()
+}
+
+// ─── acquireSingleInstanceMutex() ────────────────────────────────────────────
+
+func TestAcquireSingleInstanceMutex_FirstSucceeds(t *testing.T) {
+	h, err := acquireSingleInstanceMutex()
+	if err != nil {
+		t.Fatalf("first acquire should succeed: %v", err)
+	}
+	windows.CloseHandle(h)
+}
+
+func TestAcquireSingleInstanceMutex_SecondFails(t *testing.T) {
+	h, err := acquireSingleInstanceMutex()
+	if err != nil {
+		t.Fatalf("first acquire should succeed: %v", err)
+	}
+	defer windows.CloseHandle(h)
+
+	_, err2 := acquireSingleInstanceMutex()
+	if err2 == nil {
+		t.Fatal("second acquire should fail when first is held")
+	}
+	if !strings.Contains(err2.Error(), "déjà en cours d'exécution") {
+		t.Errorf("unexpected error message: %v", err2)
+	}
 }
 
 // ─── min() ────────────────────────────────────────────────────────────────────
