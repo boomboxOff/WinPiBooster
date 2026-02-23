@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -242,6 +243,40 @@ func TestLoadConfig_Invalid(t *testing.T) {
 	}
 	if cfg.RetryAttempts != d.RetryAttempts {
 		t.Errorf("RetryAttempts = %d, want %d (default)", cfg.RetryAttempts, d.RetryAttempts)
+	}
+}
+
+// ─── buildDailyReport / cycleErrors ───────────────────────────────────────────
+
+func TestBuildDailyReport_IncludesAllFields(t *testing.T) {
+	report := buildDailyReport(10, 3, 5, 2)
+	for _, want := range []string{
+		"Vérifications totales : 10",
+		"Mises à jour installées : 3",
+		"Vérifications sans mise à jour : 5",
+		"Erreurs : 2",
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("report missing %q\nfull report: %s", want, report)
+		}
+	}
+}
+
+func TestBuildDailyReport_ZeroErrors(t *testing.T) {
+	report := buildDailyReport(5, 1, 4, 0)
+	if !strings.Contains(report, "Erreurs : 0") {
+		t.Errorf("report should contain 'Erreurs : 0'\nfull report: %s", report)
+	}
+}
+
+func TestCycleErrors_Reset(t *testing.T) {
+	atomic.StoreInt64(&cycleErrors, 7)
+	got := atomic.SwapInt64(&cycleErrors, 0)
+	if got != 7 {
+		t.Errorf("cycleErrors = %d, want 7", got)
+	}
+	if after := atomic.LoadInt64(&cycleErrors); after != 0 {
+		t.Errorf("cycleErrors after reset = %d, want 0", after)
 	}
 }
 

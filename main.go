@@ -40,6 +40,7 @@ var (
 	updatesChecked   int64
 	updatesInstalled int64
 	updatesSkipped   int64
+	cycleErrors      int64
 
 	// Prevent concurrent update cycles
 	cycleMu sync.Mutex
@@ -341,13 +342,21 @@ func cleanOldLogs() {
 
 // ─── Reporting ────────────────────────────────────────────────────────────────
 
+// buildDailyReport formats the daily report string from the given counters.
+func buildDailyReport(checked, installed, skipped, errors int64) string {
+	return fmt.Sprintf(
+		"Rapport quotidien :\n- Vérifications totales : %d\n- Mises à jour installées : %d\n- Vérifications sans mise à jour : %d\n- Erreurs : %d",
+		checked, installed, skipped, errors,
+	)
+}
+
 func generateDailyReport() {
 	checked := atomic.SwapInt64(&updatesChecked, 0)
 	installed := atomic.SwapInt64(&updatesInstalled, 0)
 	skipped := atomic.SwapInt64(&updatesSkipped, 0)
+	errors := atomic.SwapInt64(&cycleErrors, 0)
 
-	report := fmt.Sprintf("Rapport quotidien :\n- Vérifications totales : %d\n- Mises à jour installées : %d\n- Vérifications sans mise à jour : %d",
-		checked, installed, skipped)
+	report := buildDailyReport(checked, installed, skipped, errors)
 	log.Info(report)
 	showNotification("Rapport quotidien", report)
 }
@@ -433,12 +442,14 @@ func runCycle() {
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
 	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff, installPSWindowsUpdateModule); err != nil {
+		atomic.AddInt64(&cycleErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
 	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff, ensureWindowsUpdateServiceRunning); err != nil {
+		atomic.AddInt64(&cycleErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
@@ -446,6 +457,7 @@ func runCycle() {
 
 	updates, err := checkAvailableUpdates()
 	if err != nil {
+		atomic.AddInt64(&cycleErrors, 1)
 		// Error already logged inside checkAvailableUpdates
 		return
 	}
@@ -455,6 +467,7 @@ func runCycle() {
 			return installUpdates(updates)
 		})
 		if err != nil {
+			atomic.AddInt64(&cycleErrors, 1)
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 			showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		}
