@@ -716,6 +716,42 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 	printHelp()
 }
 
+// ─── log_level config ─────────────────────────────────────────────────────────
+
+func TestDefaults_LogLevel(t *testing.T) {
+	d := defaults()
+	if d.LogLevel != "info" {
+		t.Errorf("LogLevel default = %q, want \"info\"", d.LogLevel)
+	}
+}
+
+func TestLoadConfig_LogLevel(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"log_level":"debug"}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	c := loadConfig()
+	if c.LogLevel != "debug" {
+		t.Errorf("LogLevel = %q, want \"debug\"", c.LogLevel)
+	}
+}
+
+func TestValidateConfig_LogLevel_Invalid(t *testing.T) {
+	// log == nil in tests, validateConfig must not panic with unknown level.
+	cfg := defaults()
+	cfg.LogLevel = "verbose"
+	validateConfig(cfg)
+}
+
+func TestValidateConfig_LogLevel_Valid(t *testing.T) {
+	for _, level := range []string{"debug", "info", "warn", "error"} {
+		cfg := defaults()
+		cfg.LogLevel = level
+		validateConfig(cfg)
+	}
+}
+
 // ─── testNotify() ─────────────────────────────────────────────────────────────
 
 func TestTestNotify_NoPanic(t *testing.T) {

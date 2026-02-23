@@ -626,6 +626,21 @@ func initLogger() error {
 	}
 	cfg = loadConfig()
 	validateConfig(cfg)
+
+	// Apply log_level from config unless DEBUG=true overrides it.
+	if os.Getenv("DEBUG") != "true" {
+		switch cfg.LogLevel {
+		case "debug":
+			log.SetLevel(logrus.DebugLevel)
+		case "warn":
+			log.SetLevel(logrus.WarnLevel)
+		case "error":
+			log.SetLevel(logrus.ErrorLevel)
+		default: // "info" or unrecognised
+			log.SetLevel(logrus.InfoLevel)
+		}
+	}
+
 	if cfg != defaults() {
 		log.Debugf("Configuration chargée depuis config.json : interval=%ds retries=%d retention=%dj maxsize=%dMB",
 			cfg.CheckIntervalSeconds, cfg.RetryAttempts, cfg.LogRetentionDays, cfg.MaxLogSizeMB)

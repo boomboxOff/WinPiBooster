@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// validLogLevels lists the accepted values for the log_level config field.
+var validLogLevels = map[string]bool{
+	"debug": true,
+	"info":  true,
+	"warn":  true,
+	"error": true,
+}
+
 // Config holds runtime parameters loaded from config.json.
 // All fields are optional — missing keys fall back to defaults.
 type Config struct {
@@ -16,8 +24,9 @@ type Config struct {
 	MaxLogSizeMB               int `json:"max_log_size_mb"`
 	PSTimeoutMinutes           int `json:"ps_timeout_minutes"`
 	CmdTimeoutSeconds          int `json:"cmd_timeout_seconds"`
-	CircuitBreakerThreshold    int `json:"circuit_breaker_threshold"`
-	CircuitBreakerPauseMinutes int `json:"circuit_breaker_pause_minutes"`
+	CircuitBreakerThreshold    int    `json:"circuit_breaker_threshold"`
+	CircuitBreakerPauseMinutes int    `json:"circuit_breaker_pause_minutes"`
+	LogLevel                   string `json:"log_level"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -31,6 +40,7 @@ func defaults() Config {
 		CmdTimeoutSeconds:          300,
 		CircuitBreakerThreshold:    5,
 		CircuitBreakerPauseMinutes: 30,
+		LogLevel:                   "info",
 	}
 }
 
@@ -84,6 +94,9 @@ func loadConfig() Config {
 	if partial.CircuitBreakerPauseMinutes > 0 {
 		cfg.CircuitBreakerPauseMinutes = partial.CircuitBreakerPauseMinutes
 	}
+	if partial.LogLevel != "" {
+		cfg.LogLevel = partial.LogLevel
+	}
 
 	return cfg
 }
@@ -132,5 +145,8 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.CircuitBreakerPauseMinutes < 1 {
 		log.Warnf("config.json : circuit_breaker_pause_minutes=%d est trop bas (minimum 1) — valeur par défaut utilisée : 30", cfg.CircuitBreakerPauseMinutes)
+	}
+	if cfg.LogLevel != "" && !validLogLevels[cfg.LogLevel] {
+		log.Warnf("config.json : log_level=%q inconnu (valeurs acceptées : debug, info, warn, error) — valeur par défaut utilisée : info", cfg.LogLevel)
 	}
 }
