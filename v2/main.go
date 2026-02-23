@@ -69,11 +69,20 @@ func (u Update) Computer() string {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// newCmd creates an exec.Cmd with CREATE_NEW_PROCESS_GROUP so that Ctrl+C
+// is not forwarded to child processes, allowing our signal handler to run cleanly.
+func newCmd(name string, args ...string) *exec.Cmd {
+	c := exec.Command(name, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+	}
+	return c
+}
+
 // execCommand runs a shell command through cmd /C and returns trimmed stdout.
 func execCommand(cmd string) (string, error) {
-	out, err := exec.Command("cmd", "/C", cmd).Output()
+	out, err := newCmd("cmd", "/C", cmd).Output()
 	if err != nil {
-		// Try to get stderr for better error messages
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
 		}
@@ -88,9 +97,7 @@ func execPS(psCmd string) (string, error) {
 		`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; %s`,
 		psCmd,
 	)
-	out, err := exec.Command(
-		"powershell.exe", "-NoProfile", "-Command", full,
-	).Output()
+	out, err := newCmd("powershell.exe", "-NoProfile", "-Command", full).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
