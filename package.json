@@ -1,0 +1,17 @@
+{
+  "name": "majwindowsjs",
+  "version": "1.0.0",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "description": "",
+  "dependencies": {
+    "node-notifier": "^10.0.1",
+    "winston": "^3.17.0"
+  }
+}
