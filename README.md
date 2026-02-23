@@ -1,6 +1,6 @@
 # WinPiBooster
 
-Script Node.js de surveillance et d'installation automatique des mises à jour Windows.
+Binaire Windows de surveillance et d'installation automatique des mises à jour Windows pour un nœud Pi Network.
 
 ## Fonctionnement
 
@@ -13,17 +13,14 @@ Script Node.js de surveillance et d'installation automatique des mises à jour W
 
 ## Prérequis
 
-- Windows 10/11
-- [Node.js](https://nodejs.org/) installé dans `C:\Program Files\nodejs\`
+- Windows 10/11 (amd64)
 - PowerShell (le module **PSWindowsUpdate** est installé automatiquement si absent)
+- Droits administrateur
 
 ## Installation
 
-```bash
-git clone https://github.com/boomboxOff/WinPiBooster.git
-cd WinPiBooster
-npm install
-```
+1. Télécharger `WinPiBooster.exe` depuis la [dernière release](https://github.com/boomboxOff/WinPiBooster/releases/latest)
+2. Placer `WinPiBooster.exe` dans le dossier du projet (à côté de `WinPiBooster.bat`)
 
 ## Lancement
 
@@ -31,18 +28,18 @@ Double-cliquer sur `WinPiBooster.bat` — l'élévation des droits administrateu
 
 Ou depuis un terminal en administrateur :
 
-```bash
-node WinPiBooster.js
+```bat
+WinPiBooster.exe
 ```
 
 ## Auto-démarrage avec Windows
 
-Pour que le script se lance automatiquement à chaque démarrage Windows :
+Pour que le binaire se lance automatiquement à chaque démarrage Windows :
 
 1. Double-cliquer sur `setup.bat`
 2. Accepter l'élévation UAC
 
-Le Planificateur de tâches Windows lancera le script au démarrage avec les droits SYSTEM.
+Le Planificateur de tâches Windows lancera le binaire au démarrage avec les droits SYSTEM.
 
 Pour désinstaller la tâche, depuis un terminal en administrateur :
 
@@ -65,16 +62,18 @@ Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog
 
 ### Mode debug
 
-Pour activer les logs verbeux sans modifier le code :
+Pour activer les logs verbeux :
 
 ```bat
 SET DEBUG=true
-node WinPiBooster.js
+WinPiBooster.exe
 ```
 
-## Dépendances
+## Build depuis les sources
 
-| Package | Rôle |
-|---|---|
-| `winston` | Logging fichier + console |
-| `node-notifier` | Notifications Windows toast |
+Prérequis : [Go 1.22+](https://go.dev/dl/)
+
+```bat
+cd v2
+go build -ldflags="-s -w" -o ../WinPiBooster.exe .
+```
