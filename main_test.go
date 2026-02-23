@@ -499,6 +499,31 @@ func TestWriteStatusJSON(t *testing.T) {
 	}
 }
 
+// ─── uptime_seconds in status.json ────────────────────────────────────────────
+
+func TestWriteStatusJSON_UptimeSeconds(t *testing.T) {
+	oldDir := logDir
+	logDir = t.TempDir()
+	defer func() { logDir = oldDir }()
+
+	startTime = time.Now().Add(-5 * time.Second)
+	defer func() { startTime = time.Now() }()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(logDir, "status.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if s.UptimeSeconds < 4 {
+		t.Errorf("UptimeSeconds = %d, want >= 4", s.UptimeSeconds)
+	}
+}
+
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 
 func TestDefaults_CircuitBreaker(t *testing.T) {

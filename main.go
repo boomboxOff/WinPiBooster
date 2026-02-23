@@ -399,6 +399,7 @@ func cleanOldLogsVerbose(verbose bool) {
 type statusJSON struct {
 	Version          string         `json:"version"`
 	LastCheck        string         `json:"last_check"`
+	UptimeSeconds    int64          `json:"uptime_seconds"`
 	UpdatesChecked   int64          `json:"updates_checked"`
 	UpdatesInstalled int64          `json:"updates_installed"`
 	UpdatesSkipped   int64          `json:"updates_skipped"`
@@ -416,6 +417,7 @@ func writeStatusJSON() {
 	s := statusJSON{
 		Version:          version,
 		LastCheck:        time.Now().UTC().Format(time.RFC3339),
+		UptimeSeconds:    int64(time.Since(startTime).Seconds()),
 		UpdatesChecked:   atomic.LoadInt64(&updatesChecked),
 		UpdatesInstalled: atomic.LoadInt64(&updatesInstalled),
 		UpdatesSkipped:   atomic.LoadInt64(&updatesSkipped),
