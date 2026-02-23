@@ -25,8 +25,22 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
-        run: go test ./...
+      - name: Test with coverage
+        run: go test -coverprofile=coverage.out ./...
+
+      - name: Coverage report
+        run: go tool cover -func=coverage.out
+
+      - name: Coverage threshold (10%)
+        shell: pwsh
+        run: |
+          $line = go tool cover -func=coverage.out | Select-String "^total:"
+          $pct  = [double]($line -replace ".*\s+([\d.]+)%.*", '$1')
+          Write-Host "Total coverage: $pct%"
+          if ($pct -lt 10.0) {
+            Write-Error "Coverage $pct% is below minimum threshold of 10%"
+            exit 1
+          }
 
       - name: Build
         run: go build -ldflags="-s -w -X main.version=dev" -o WinPiBooster.exe .
