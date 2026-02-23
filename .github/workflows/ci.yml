@@ -39,14 +39,14 @@ jobs:
       - name: Coverage report
         run: go tool cover -func=coverage.out
 
-      - name: Coverage threshold (10%)
+      - name: Coverage threshold (15%)
         shell: pwsh
         run: |
           $line = go tool cover -func=coverage.out | Select-String "^total:"
           $pct  = [double]($line -replace ".*\s+([\d.]+)%.*", '$1')
           Write-Host "Total coverage: $pct%"
-          if ($pct -lt 10.0) {
-            Write-Error "Coverage $pct% is below minimum threshold of 10%"
+          if ($pct -lt 15.0) {
+            Write-Error "Coverage $pct% is below minimum threshold of 15%"
             exit 1
           }
 
