@@ -1,4 +1,4 @@
-module winpibooster/v2
+module winpibooster
 
 go 1.22
 

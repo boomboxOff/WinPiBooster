@@ -18,10 +18,13 @@ import (
 	"gopkg.in/toast.v1"
 )
 
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z"
+var version = "dev"
+
 // Timeouts for child process execution
 const (
-	cmdTimeout  = 5 * time.Minute  // sc, net session, sc start
-	psTimeout   = 10 * time.Minute // PowerShell (Get/Install-WindowsUpdate can be slow)
+	cmdTimeout = 5 * time.Minute  // sc, net session, sc start
+	psTimeout  = 10 * time.Minute // PowerShell (Get/Install-WindowsUpdate can be slow)
 )
 
 // ─── Globals ──────────────────────────────────────────────────────────────────
@@ -342,7 +345,7 @@ func generateDailyReport() {
 
 func heartbeat() {
 	log.Info(strings.Repeat("─", 62))
-	log.Info("Script actif — surveillance des mises à jour Windows en cours.")
+	log.Infof("WinPiBooster %s — surveillance des mises à jour Windows en cours.", version)
 }
 
 // durationUntilMidnight returns the duration until the next midnight.
