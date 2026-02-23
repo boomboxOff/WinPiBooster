@@ -512,6 +512,7 @@ func runInteractive() {
 		os.Exit(1)
 	}
 
+	showNotification("WinPiBooster démarré", "Surveillance des mises à jour Windows active.")
 	archiveOldLogs()
 	heartbeat()
 
@@ -550,6 +551,7 @@ func runInteractive() {
 	shutdownCancel()
 	heartbeatTicker.Stop()
 	cycleTicker.Stop()
+	showNotification("WinPiBooster arrêté", "La surveillance des mises à jour Windows est inactive.")
 }
 
 // ─── Report / Help ────────────────────────────────────────────────────────────

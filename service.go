@@ -27,6 +27,7 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	heartbeatTicker := time.NewTicker(time.Hour)
 	cycleTicker := time.NewTicker(cfg.CheckInterval())
 
+	showNotification("WinPiBooster démarré", "Surveillance des mises à jour Windows active.")
 	archiveOldLogs()
 	heartbeat()
 	scheduleDailyReport()
@@ -62,6 +63,7 @@ loop:
 		case svc.Stop, svc.Shutdown:
 			log.Infof("Arrêt du service demandé (%v).", c.Cmd)
 			shutdownCancel()
+			showNotification("WinPiBooster arrêté", "La surveillance des mises à jour Windows est inactive.")
 			break loop
 		case svc.Interrogate:
 			status <- c.CurrentStatus
