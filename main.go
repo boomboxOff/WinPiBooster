@@ -47,6 +47,9 @@ var (
 	// Cached flag: PSWindowsUpdate module ready
 	psModuleReady bool
 	psModuleMu    sync.Mutex
+
+	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
+	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 )
 
 // Update mirrors the JSON fields returned by Get-WindowsUpdate.
@@ -92,7 +95,7 @@ func newCmdCtx(ctx context.Context, name string, args ...string) *exec.Cmd {
 
 // execCommand runs a shell command through cmd /C with a timeout.
 func execCommand(cmd string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	ctx, cancel := context.WithTimeout(shutdownCtx, cmdTimeout)
 	defer cancel()
 	out, err := newCmdCtx(ctx, "cmd", "/C", cmd).Output()
 	if err != nil {
@@ -110,7 +113,7 @@ func execPS(psCmd string) (string, error) {
 		`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; %s`,
 		psCmd,
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), psTimeout)
+	ctx, cancel := context.WithTimeout(shutdownCtx, psTimeout)
 	defer cancel()
 	out, err := newCmdCtx(ctx, "powershell.exe", "-NoProfile", "-Command", full).Output()
 	if err != nil {
@@ -422,6 +425,11 @@ func runCycle() {
 	}
 	defer cycleMu.Unlock()
 
+	// Abort immediately if shutdown was requested while waiting for the lock.
+	if shutdownCtx.Err() != nil {
+		return
+	}
+
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
 	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff, installPSWindowsUpdateModule); err != nil {
@@ -491,8 +499,13 @@ func runInteractive() {
 
 	heartbeatTicker := time.NewTicker(time.Hour)
 	go func() {
-		for range heartbeatTicker.C {
-			heartbeat()
+		for {
+			select {
+			case <-heartbeatTicker.C:
+				heartbeat()
+			case <-shutdownCtx.Done():
+				return
+			}
 		}
 	}()
 
@@ -501,9 +514,14 @@ func runInteractive() {
 
 	cycleTicker := time.NewTicker(cfg.CheckInterval())
 	go func() {
-		for range cycleTicker.C {
-			log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")
-			go runCycle()
+		for {
+			select {
+			case <-cycleTicker.C:
+				log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")
+				go runCycle()
+			case <-shutdownCtx.Done():
+				return
+			}
 		}
 	}()
 
@@ -511,6 +529,7 @@ func runInteractive() {
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	sig := <-sigs
 	log.Infof("Arrêt du script demandé (%s).", sig)
+	shutdownCancel()
 	heartbeatTicker.Stop()
 	cycleTicker.Stop()
 }

@@ -222,6 +222,17 @@ func TestLoadConfig_Invalid(t *testing.T) {
 	}
 }
 
+// ─── shutdownCtx ──────────────────────────────────────────────────────────────
+
+func TestShutdownCtx_InitiallyNotDone(t *testing.T) {
+	if shutdownCtx == nil {
+		t.Fatal("shutdownCtx is nil")
+	}
+	if err := shutdownCtx.Err(); err != nil {
+		t.Errorf("shutdownCtx.Err() = %v, want nil (context should not be cancelled at startup)", err)
+	}
+}
+
 // ─── printHelp() ──────────────────────────────────────────────────────────────
 
 func TestPrintHelp_NoPanic(t *testing.T) {

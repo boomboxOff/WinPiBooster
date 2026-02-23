@@ -33,14 +33,24 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	go runCycle()
 
 	go func() {
-		for range heartbeatTicker.C {
-			heartbeat()
+		for {
+			select {
+			case <-heartbeatTicker.C:
+				heartbeat()
+			case <-shutdownCtx.Done():
+				return
+			}
 		}
 	}()
 	go func() {
-		for range cycleTicker.C {
-			log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")
-			go runCycle()
+		for {
+			select {
+			case <-cycleTicker.C:
+				log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")
+				go runCycle()
+			case <-shutdownCtx.Done():
+				return
+			}
 		}
 	}()
 
@@ -51,6 +61,7 @@ loop:
 		switch c.Cmd {
 		case svc.Stop, svc.Shutdown:
 			log.Infof("Arrêt du service demandé (%v).", c.Cmd)
+			shutdownCancel()
 			break loop
 		case svc.Interrogate:
 			status <- c.CurrentStatus
