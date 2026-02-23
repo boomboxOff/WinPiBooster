@@ -10,7 +10,13 @@ set BAT_PATH=%~dp0WindowsMAJ.bat
 
 schtasks /query /tn "%TASK_NAME%" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo La tache '%TASK_NAME%' existe deja. Suppression...
+    echo La tache '%TASK_NAME%' existe deja.
+    set /p CONFIRM=Voulez-vous la remplacer ? (O/N) :
+    if /i not "%CONFIRM%"=="O" (
+        echo Annulation.
+        pause
+        exit /b
+    )
     schtasks /delete /tn "%TASK_NAME%" /f
 )
 
