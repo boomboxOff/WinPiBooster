@@ -375,6 +375,27 @@ func checkAdminRights() error {
 	return nil
 }
 
+// ─── Retry helper ─────────────────────────────────────────────────────────────
+
+// retryBackoff runs fn up to maxAttempts times, waiting backoffDelays between
+// attempts. Returns nil on first success, last error otherwise.
+func retryBackoff(name string, maxAttempts int, backoffDelays []time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < maxAttempts; i++ {
+		if err = fn(); err == nil {
+			return nil
+		}
+		if i < maxAttempts-1 {
+			delay := backoffDelays[min(i, len(backoffDelays)-1)]
+			log.Warnf("%s — tentative %d/%d échouée, nouvel essai dans %s : %v", name, i+1, maxAttempts, delay, err)
+			time.Sleep(delay)
+		}
+	}
+	return err
+}
+
+var defaultBackoff = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second}
+
 // ─── Main cycle ───────────────────────────────────────────────────────────────
 
 func runCycle() {
@@ -387,13 +408,13 @@ func runCycle() {
 
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
-	if err := installPSWindowsUpdateModule(); err != nil {
+	if err := retryBackoff("installPSWindowsUpdateModule", 3, defaultBackoff, installPSWindowsUpdateModule); err != nil {
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
-	if err := ensureWindowsUpdateServiceRunning(); err != nil {
+	if err := retryBackoff("ensureWindowsUpdateServiceRunning", 3, defaultBackoff, ensureWindowsUpdateServiceRunning); err != nil {
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
