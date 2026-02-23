@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows/svc"
 	"gopkg.in/toast.v1"
 )
 
@@ -439,10 +440,60 @@ func runCycle() {
 	log.Debug("Processus terminé.")
 }
 
+// ─── Startup helpers ──────────────────────────────────────────────────────────
+
+// initLogger initialises the logger and sets logDir from the executable path.
+func initLogger() error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot determine executable path: %w", err)
+	}
+	logDir = filepath.Dir(exePath)
+
+	log, logHook, err = setupLogger()
+	return err
+}
+
+// runInteractive runs the update loop in console mode (SIGINT/SIGTERM aware).
+func runInteractive() {
+	if err := checkAdminRights(); err != nil {
+		log.Error("Le script doit être exécuté en tant qu'administrateur. Relancez via WinPiBooster.bat en tant qu'administrateur.")
+		showNotification("Erreur", "Droits administrateur requis. Relancez en tant qu'administrateur.")
+		os.Exit(1)
+	}
+
+	archiveOldLogs()
+	heartbeat()
+
+	heartbeatTicker := time.NewTicker(time.Hour)
+	go func() {
+		for range heartbeatTicker.C {
+			heartbeat()
+		}
+	}()
+
+	scheduleDailyReport()
+	go runCycle()
+
+	cycleTicker := time.NewTicker(60 * time.Second)
+	go func() {
+		for range cycleTicker.C {
+			log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")
+			go runCycle()
+		}
+	}()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	sig := <-sigs
+	log.Infof("Arrêt du script demandé (%s).", sig)
+	heartbeatTicker.Stop()
+	cycleTicker.Stop()
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 func main() {
-	// Recover from panics
 	defer func() {
 		if r := recover(); r != nil {
 			msg := fmt.Sprintf("Exception non catchée — arrêt du script : %v", r)
@@ -456,17 +507,7 @@ func main() {
 		}
 	}()
 
-	// Resolve executable directory (equivalent of Node's __dirname)
-	exePath, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Cannot determine executable path:", err)
-		os.Exit(1)
-	}
-	logDir = filepath.Dir(exePath)
-
-	// Initialise logger
-	log, logHook, err = setupLogger()
-	if err != nil {
+	if err := initLogger(); err != nil {
 		fmt.Fprintln(os.Stderr, "Logger init failed:", err)
 		os.Exit(1)
 	}
@@ -474,49 +515,43 @@ func main() {
 		defer logHook.Close()
 	}
 
-	// Check admin rights
-	if err := checkAdminRights(); err != nil {
-		log.Error("Le script doit être exécuté en tant qu'administrateur. Relancez via WinPiBooster.bat en tant qu'administrateur.")
-		showNotification("Erreur", "Droits administrateur requis. Relancez en tant qu'administrateur.")
-		os.Exit(1)
+	// Dispatch on first argument
+	cmd := ""
+	if len(os.Args) > 1 {
+		cmd = os.Args[1]
 	}
 
-	// Archive previous log on startup
-	archiveOldLogs()
-
-	// Initial heartbeat
-	heartbeat()
-
-	// Hourly heartbeat
-	heartbeatTicker := time.NewTicker(time.Hour)
-	go func() {
-		for range heartbeatTicker.C {
-			heartbeat()
+	switch cmd {
+	case "install":
+		if err := installService(); err != nil {
+			fmt.Fprintln(os.Stderr, "Erreur:", err)
+			os.Exit(1)
 		}
-	}()
-
-	// Daily report at midnight
-	scheduleDailyReport()
-
-	// First update cycle immediately
-	go runCycle()
-
-	// Update cycle every 60 seconds (intentional interval for Pi node)
-	cycleTicker := time.NewTicker(60 * time.Second)
-	go func() {
-		for range cycleTicker.C {
-			log.Debug("Début d'un nouveau cycle de vérification des mises à jour.")
-			go runCycle()
+	case "remove":
+		if err := removeService(); err != nil {
+			fmt.Fprintln(os.Stderr, "Erreur:", err)
+			os.Exit(1)
 		}
-	}()
-
-	// Graceful shutdown on SIGINT / SIGTERM
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
-	sig := <-sigs
-	log.Infof("Arrêt du script demandé (%s).", sig)
-	heartbeatTicker.Stop()
-	cycleTicker.Stop()
+	case "start":
+		if err := startService(); err != nil {
+			fmt.Fprintln(os.Stderr, "Erreur:", err)
+			os.Exit(1)
+		}
+	case "stop":
+		if err := stopService(); err != nil {
+			fmt.Fprintln(os.Stderr, "Erreur:", err)
+			os.Exit(1)
+		}
+	case "run":
+		// Launched by the SCM — run as a Windows service
+		if err := svc.Run(serviceName, &winService{}); err != nil {
+			log.Errorf("Service error: %v", err)
+			os.Exit(1)
+		}
+	default:
+		// No argument (or unknown) — interactive console mode
+		runInteractive()
+	}
 }
 
 // min returns the smaller of a and b.

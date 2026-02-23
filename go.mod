@@ -1,6 +1,6 @@
 module winpibooster
 
-go 1.22
+go 1.24.0
 
 require (
 	github.com/mattn/go-colorable v0.1.13
@@ -11,5 +11,5 @@ require (
 require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
-	golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab // indirect
+	golang.org/x/sys v0.41.0 // indirect
 )

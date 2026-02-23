@@ -47,20 +47,23 @@ Ou depuis un terminal en administrateur :
 WinPiBooster.exe
 ```
 
-## Auto-démarrage avec Windows
+## Auto-démarrage avec Windows (service natif)
 
-Pour que le binaire se lance automatiquement à chaque démarrage Windows :
+Pour installer WinPiBooster comme service Windows (démarrage automatique, redémarrage sur crash) :
 
 1. Double-cliquer sur `setup.bat`
 2. Accepter l'élévation UAC
 
-Le Planificateur de tâches Windows lancera le binaire au démarrage avec les droits SYSTEM.
-
-Pour désinstaller la tâche, depuis un terminal en administrateur :
+Ou depuis un terminal en administrateur :
 
 ```bat
-schtasks /delete /tn WinPiBooster /f
+WinPiBooster.exe install   # installe le service
+WinPiBooster.exe start     # démarre le service
+WinPiBooster.exe stop      # arrête le service
+WinPiBooster.exe remove    # désinstalle le service
 ```
+
+Le service est visible dans `services.msc` et gérable via `sc.exe`.
 
 ## Logs
 
