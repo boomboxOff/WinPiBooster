@@ -495,6 +495,7 @@ func scheduleDailyReport() {
 	go func() {
 		for {
 			<-timer.C
+			archiveOldLogs()
 			generateDailyReport()
 			cleanOldLogs()
 			timer.Reset(durationUntilMidnight())
