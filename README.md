@@ -10,6 +10,7 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 - Installe automatiquement les mises à jour détectées avec redémarrage automatique si nécessaire
 - Envoie des **notifications Windows toast** à chaque événement clé (démarrage, arrêt, installation, erreur, rapport)
 - Génère un **rapport quotidien à minuit** avec archivage du log et remise à zéro des compteurs
+- Génère un **rapport hebdomadaire chaque dimanche à minuit** avec les totaux de la semaine
 - Archive les logs à chaque lancement, à minuit et lors d'un dépassement de taille (**10 MB** par défaut)
 - Supprime les archives de plus de **30 jours** automatiquement
 - Envoie un **heartbeat toutes les heures** avec uptime et compteurs
@@ -152,7 +153,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.10.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.11.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -177,7 +178,7 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.10.0",
+  "version": "v2.11.0",
   "last_check": "2026-02-24T10:15:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
@@ -204,7 +205,7 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 2. `go vet` — analyse statique de base
 3. `staticcheck` — analyse statique avancée
 4. `go test -race -count=1 -timeout 120s` — tests unitaires avec détecteur de races
-5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **20%**)
+5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **25%**)
 6. `go build` — compilation du binaire final
 
 ## Build depuis les sources
@@ -212,5 +213,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.10.0" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.11.0" -o WinPiBooster.exe .
 ```
