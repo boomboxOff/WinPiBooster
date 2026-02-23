@@ -809,6 +809,30 @@ func TestValidateConfig_LogLevel_Valid(t *testing.T) {
 	}
 }
 
+// ─── printShowConfig() ────────────────────────────────────────────────────────
+
+func TestPrintShowConfig_NoPanic(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = old
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	for _, want := range []string{"check_interval_seconds", "log_level", "retry_attempts"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in output, got: %s", want, out)
+		}
+	}
+}
+
 // ─── resetCounters() ──────────────────────────────────────────────────────────
 
 func TestResetCounters(t *testing.T) {

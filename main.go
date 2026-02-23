@@ -889,6 +889,28 @@ func printExtendedStatus() {
 	}
 }
 
+// printShowConfig displays the active configuration (loaded values or defaults).
+func printShowConfig() {
+	exePath, _ := os.Executable()
+	cfgPath := filepath.Join(filepath.Dir(exePath), "config.json")
+	_, err := os.Stat(cfgPath)
+	if err == nil {
+		fmt.Printf("Configuration chargée depuis : %s\n\n", cfgPath)
+	} else {
+		fmt.Println("Aucun config.json trouvé — valeurs par défaut utilisées.")
+		fmt.Println()
+	}
+	fmt.Printf("  check_interval_seconds       : %d\n", cfg.CheckIntervalSeconds)
+	fmt.Printf("  retry_attempts               : %d\n", cfg.RetryAttempts)
+	fmt.Printf("  log_retention_days           : %d\n", cfg.LogRetentionDays)
+	fmt.Printf("  max_log_size_mb              : %d\n", cfg.MaxLogSizeMB)
+	fmt.Printf("  ps_timeout_minutes           : %d\n", cfg.PSTimeoutMinutes)
+	fmt.Printf("  cmd_timeout_seconds          : %d\n", cfg.CmdTimeoutSeconds)
+	fmt.Printf("  circuit_breaker_threshold    : %d\n", cfg.CircuitBreakerThreshold)
+	fmt.Printf("  circuit_breaker_pause_minutes: %d\n", cfg.CircuitBreakerPauseMinutes)
+	fmt.Printf("  log_level                    : %s\n", cfg.LogLevel)
+}
+
 // resetCounters zeroes all atomic counters, clears the install history, and rewrites status.json.
 func resetCounters() {
 	atomic.StoreInt64(&updatesChecked, 0)
@@ -930,6 +952,7 @@ Usage:
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe test-notify       Envoie une notification toast de test
   WinPiBooster.exe reset-counters    Remet les compteurs à zéro et réécrit status.json
+  WinPiBooster.exe show-config       Affiche la configuration active
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe help              Affiche cette aide
 
@@ -1023,6 +1046,8 @@ func main() {
 		testNotify()
 	case "reset-counters":
 		resetCounters()
+	case "show-config":
+		printShowConfig()
 	case "version":
 		fmt.Printf("WinPiBooster %s\n", version)
 	case "help":
