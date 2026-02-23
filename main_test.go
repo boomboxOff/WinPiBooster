@@ -151,6 +151,28 @@ func TestDefaults(t *testing.T) {
 	if cfg.MaxLogSizeMB != 10 {
 		t.Errorf("MaxLogSizeMB = %d, want 10", cfg.MaxLogSizeMB)
 	}
+	if cfg.PSTimeoutMinutes != 10 {
+		t.Errorf("PSTimeoutMinutes = %d, want 10", cfg.PSTimeoutMinutes)
+	}
+}
+
+func TestConfigPSTimeout(t *testing.T) {
+	cfg := Config{PSTimeoutMinutes: 20}
+	if got := cfg.PSTimeout(); got != 20*time.Minute {
+		t.Errorf("PSTimeout() = %v, want 20m", got)
+	}
+}
+
+func TestLoadConfig_PSTimeout(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"ps_timeout_minutes": 30}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := loadConfig()
+	if cfg.PSTimeoutMinutes != 30 {
+		t.Errorf("PSTimeoutMinutes = %d, want 30", cfg.PSTimeoutMinutes)
+	}
 }
 
 func TestLoadConfig_MaxLogSizeMB(t *testing.T) {

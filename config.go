@@ -14,6 +14,7 @@ type Config struct {
 	RetryAttempts        int `json:"retry_attempts"`
 	LogRetentionDays     int `json:"log_retention_days"`
 	MaxLogSizeMB         int `json:"max_log_size_mb"`
+	PSTimeoutMinutes     int `json:"ps_timeout_minutes"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -23,6 +24,7 @@ func defaults() Config {
 		RetryAttempts:        3,
 		LogRetentionDays:     30,
 		MaxLogSizeMB:         10,
+		PSTimeoutMinutes:     10,
 	}
 }
 
@@ -64,6 +66,9 @@ func loadConfig() Config {
 	if partial.MaxLogSizeMB > 0 {
 		cfg.MaxLogSizeMB = partial.MaxLogSizeMB
 	}
+	if partial.PSTimeoutMinutes > 0 {
+		cfg.PSTimeoutMinutes = partial.PSTimeoutMinutes
+	}
 
 	return cfg
 }
@@ -71,6 +76,11 @@ func loadConfig() Config {
 // CheckInterval returns the update check interval as a time.Duration.
 func (c Config) CheckInterval() time.Duration {
 	return time.Duration(c.CheckIntervalSeconds) * time.Second
+}
+
+// PSTimeout returns the PowerShell command timeout as a time.Duration.
+func (c Config) PSTimeout() time.Duration {
+	return time.Duration(c.PSTimeoutMinutes) * time.Minute
 }
 
 // validateConfig logs a WARN for each field that is outside its acceptable range.
@@ -90,5 +100,8 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.MaxLogSizeMB < 1 {
 		log.Warnf("config.json : max_log_size_mb=%d est trop bas (minimum 1) — valeur par défaut utilisée : 10", cfg.MaxLogSizeMB)
+	}
+	if cfg.PSTimeoutMinutes < 1 {
+		log.Warnf("config.json : ps_timeout_minutes=%d est trop bas (minimum 1) — valeur par défaut utilisée : 10", cfg.PSTimeoutMinutes)
 	}
 }

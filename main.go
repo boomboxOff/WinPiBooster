@@ -22,11 +22,8 @@ import (
 // version is set at build time via -ldflags "-X main.version=vX.Y.Z"
 var version = "dev"
 
-// Timeouts for child process execution
-const (
-	cmdTimeout = 5 * time.Minute  // sc, net session, sc start
-	psTimeout  = 10 * time.Minute // PowerShell (Get/Install-WindowsUpdate can be slow)
-)
+// cmdTimeout is the fixed timeout for short system commands (sc, net session).
+const cmdTimeout = 5 * time.Minute
 
 // ─── Globals ──────────────────────────────────────────────────────────────────
 
@@ -114,7 +111,7 @@ func execPS(psCmd string) (string, error) {
 		`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; %s`,
 		psCmd,
 	)
-	ctx, cancel := context.WithTimeout(shutdownCtx, psTimeout)
+	ctx, cancel := context.WithTimeout(shutdownCtx, cfg.PSTimeout())
 	defer cancel()
 	out, err := newCmdCtx(ctx, "powershell.exe", "-NoProfile", "-Command", full).Output()
 	if err != nil {
