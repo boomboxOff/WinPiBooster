@@ -4,15 +4,22 @@ const notifier = require('node-notifier');
 const path = require('path');
 const fs = require('fs');
 
+// Logger formats
+const fileFormat = format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
+);
+const consoleFormat = format.combine(
+    format.colorize(),
+    format.timestamp({ format: 'HH:mm:ss' }),
+    format.printf(({ timestamp, level, message }) => `${timestamp} ${level}: ${message}`)
+);
+
 // Logger setup
-let fileTransport = new transports.File({ filename: path.join(__dirname, 'UpdateLog.txt') });
+let fileTransport = new transports.File({ filename: path.join(__dirname, 'UpdateLog.txt'), format: fileFormat });
 const logger = createLogger({
     level: 'info',
-    format: format.combine(
-        format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
-    ),
-    transports: [fileTransport, new transports.Console()],
+    transports: [fileTransport, new transports.Console({ format: consoleFormat })],
 });
 
 let updatesChecked = 0;
@@ -168,7 +175,7 @@ function archiveOldLogs() {
     const archiveFile = path.join(__dirname, `UpdateLog_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
     logger.remove(fileTransport);
     fs.renameSync(logFile, archiveFile);
-    fileTransport = new transports.File({ filename: logFile });
+    fileTransport = new transports.File({ filename: logFile, format: fileFormat });
     logger.add(fileTransport);
     logger.debug("Journal archivé.");
 }
@@ -241,6 +248,7 @@ process.on('SIGTERM', () => {
 
 // Heartbeat — once at startup then every hour
 function heartbeat() {
+    logger.info('─'.repeat(62));
     logger.info("Script actif — surveillance des mises à jour Windows en cours.");
 }
 heartbeat();
