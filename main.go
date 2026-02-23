@@ -683,6 +683,15 @@ func runCycle() {
 			showNotification("Redémarrage requis", msg)
 			return
 		}
+		if min := int64(cfg.MinFreeDiskMB); min > 0 {
+			if free := freeDiskMB(); free < min {
+				msg := fmt.Sprintf("Espace disque insuffisant (%d MB libres, minimum %d MB) — installation ignorée.", free, min)
+				log.Warn(msg)
+				showNotification("Espace disque insuffisant", msg)
+				atomic.AddInt64(&updatesSkipped, int64(len(updates)))
+				return
+			}
+		}
 		err := retryBackoff("installUpdates", retryAttempts(), defaultBackoff, func() error {
 			return installUpdates(updates)
 		})

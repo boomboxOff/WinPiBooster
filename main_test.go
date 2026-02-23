@@ -849,6 +849,33 @@ func TestValidateConfig_LogLevel_Valid(t *testing.T) {
 	}
 }
 
+// ─── min_free_disk_mb ─────────────────────────────────────────────────────────
+
+func TestDefaults_MinFreeDiskMB(t *testing.T) {
+	d := defaults()
+	if d.MinFreeDiskMB != 500 {
+		t.Errorf("MinFreeDiskMB default = %d, want 500", d.MinFreeDiskMB)
+	}
+}
+
+func TestLoadConfig_MinFreeDiskMB(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"min_free_disk_mb":1000}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	c := loadConfig()
+	if c.MinFreeDiskMB != 1000 {
+		t.Errorf("MinFreeDiskMB = %d, want 1000", c.MinFreeDiskMB)
+	}
+}
+
+func TestValidateConfig_MinFreeDiskMB_TooLow(t *testing.T) {
+	c := defaults()
+	c.MinFreeDiskMB = 50
+	validateConfig(c) // log == nil, must not panic
+}
+
 // ─── notifications_enabled ────────────────────────────────────────────────────
 
 func TestNotificationsOn_Default(t *testing.T) {

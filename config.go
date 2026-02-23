@@ -31,6 +31,7 @@ type Config struct {
 	CircuitBreakerPauseMinutes int    `json:"circuit_breaker_pause_minutes"`
 	LogLevel                   string `json:"log_level"`
 	NotificationsEnabled       *bool  `json:"notifications_enabled"`
+	MinFreeDiskMB              int    `json:"min_free_disk_mb"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -46,6 +47,7 @@ func defaults() Config {
 		CircuitBreakerPauseMinutes: 30,
 		LogLevel:                   "info",
 		NotificationsEnabled:       boolPtr(true),
+		MinFreeDiskMB:              500,
 	}
 }
 
@@ -105,6 +107,9 @@ func loadConfig() Config {
 	if partial.NotificationsEnabled != nil {
 		cfg.NotificationsEnabled = partial.NotificationsEnabled
 	}
+	if partial.MinFreeDiskMB > 0 {
+		cfg.MinFreeDiskMB = partial.MinFreeDiskMB
+	}
 
 	return cfg
 }
@@ -161,5 +166,8 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.LogLevel != "" && !validLogLevels[cfg.LogLevel] {
 		log.Warnf("config.json : log_level=%q inconnu (valeurs acceptées : debug, info, warn, error) — valeur par défaut utilisée : info", cfg.LogLevel)
+	}
+	if cfg.MinFreeDiskMB < 100 {
+		log.Warnf("config.json : min_free_disk_mb=%d est trop bas (minimum 100) — valeur par défaut utilisée : 500", cfg.MinFreeDiskMB)
 	}
 }
