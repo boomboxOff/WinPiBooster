@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// boolPtr returns a pointer to the given bool value.
+func boolPtr(b bool) *bool { return &b }
+
 // validLogLevels lists the accepted values for the log_level config field.
 var validLogLevels = map[string]bool{
 	"debug": true,
@@ -27,6 +30,7 @@ type Config struct {
 	CircuitBreakerThreshold    int    `json:"circuit_breaker_threshold"`
 	CircuitBreakerPauseMinutes int    `json:"circuit_breaker_pause_minutes"`
 	LogLevel                   string `json:"log_level"`
+	NotificationsEnabled       *bool  `json:"notifications_enabled"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -41,6 +45,7 @@ func defaults() Config {
 		CircuitBreakerThreshold:    5,
 		CircuitBreakerPauseMinutes: 30,
 		LogLevel:                   "info",
+		NotificationsEnabled:       boolPtr(true),
 	}
 }
 
@@ -97,8 +102,16 @@ func loadConfig() Config {
 	if partial.LogLevel != "" {
 		cfg.LogLevel = partial.LogLevel
 	}
+	if partial.NotificationsEnabled != nil {
+		cfg.NotificationsEnabled = partial.NotificationsEnabled
+	}
 
 	return cfg
+}
+
+// NotificationsOn returns true if toast notifications are enabled (default: true).
+func (c Config) NotificationsOn() bool {
+	return c.NotificationsEnabled == nil || *c.NotificationsEnabled
 }
 
 // CheckInterval returns the update check interval as a time.Duration.

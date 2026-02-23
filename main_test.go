@@ -849,6 +849,43 @@ func TestValidateConfig_LogLevel_Valid(t *testing.T) {
 	}
 }
 
+// ─── notifications_enabled ────────────────────────────────────────────────────
+
+func TestNotificationsOn_Default(t *testing.T) {
+	d := defaults()
+	if !d.NotificationsOn() {
+		t.Error("NotificationsOn() should be true by default")
+	}
+}
+
+func TestNotificationsOn_Disabled(t *testing.T) {
+	c := defaults()
+	c.NotificationsEnabled = boolPtr(false)
+	if c.NotificationsOn() {
+		t.Error("NotificationsOn() should be false when explicitly disabled")
+	}
+}
+
+func TestNotificationsOn_Nil(t *testing.T) {
+	c := defaults()
+	c.NotificationsEnabled = nil
+	if !c.NotificationsOn() {
+		t.Error("NotificationsOn() should be true when nil (no config)")
+	}
+}
+
+func TestLoadConfig_NotificationsDisabled(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"notifications_enabled":false}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	c := loadConfig()
+	if c.NotificationsOn() {
+		t.Error("NotificationsOn() should be false when set to false in config")
+	}
+}
+
 // ─── diagnose ─────────────────────────────────────────────────────────────────
 
 func TestFreeDiskMB_Positive(t *testing.T) {

@@ -149,7 +149,11 @@ func execPS(psCmd string) (string, error) {
 }
 
 // showNotification sends a Windows toast notification (best-effort).
+// Does nothing if notifications are disabled in config.
 func showNotification(title, message string) {
+	if !cfg.NotificationsOn() {
+		return
+	}
 	n := toast.Notification{
 		AppID:   "WinPiBooster",
 		Title:   title,
