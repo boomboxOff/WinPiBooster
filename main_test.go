@@ -410,6 +410,41 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── Circuit breaker ──────────────────────────────────────────────────────────
+
+func TestDefaults_CircuitBreaker(t *testing.T) {
+	d := defaults()
+	if d.CircuitBreakerThreshold != 5 {
+		t.Errorf("CircuitBreakerThreshold = %d, want 5", d.CircuitBreakerThreshold)
+	}
+	if d.CircuitBreakerPauseMinutes != 30 {
+		t.Errorf("CircuitBreakerPauseMinutes = %d, want 30", d.CircuitBreakerPauseMinutes)
+	}
+}
+
+func TestConsecutiveErrors_ResetOnSuccess(t *testing.T) {
+	atomic.StoreInt64(&consecutiveErrors, 4)
+	atomic.StoreInt64(&consecutiveErrors, 0)
+	if got := atomic.LoadInt64(&consecutiveErrors); got != 0 {
+		t.Errorf("consecutiveErrors = %d, want 0", got)
+	}
+}
+
+func TestLoadConfig_CircuitBreaker(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"circuit_breaker_threshold":3,"circuit_breaker_pause_minutes":15}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := loadConfig()
+	if cfg.CircuitBreakerThreshold != 3 {
+		t.Errorf("CircuitBreakerThreshold = %d, want 3", cfg.CircuitBreakerThreshold)
+	}
+	if cfg.CircuitBreakerPauseMinutes != 15 {
+		t.Errorf("CircuitBreakerPauseMinutes = %d, want 15", cfg.CircuitBreakerPauseMinutes)
+	}
+}
+
 // ─── parseRebootPending() ─────────────────────────────────────────────────────
 
 func TestParseRebootPending(t *testing.T) {

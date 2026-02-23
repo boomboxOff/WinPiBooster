@@ -34,10 +34,11 @@ var (
 	cfg           Config
 
 	// Counters (atomic)
-	updatesChecked   int64
-	updatesInstalled int64
-	updatesSkipped   int64
-	cycleErrors      int64
+	updatesChecked      int64
+	updatesInstalled    int64
+	updatesSkipped      int64
+	cycleErrors         int64
+	consecutiveErrors   int64 // reset to 0 on each successful cycle
 
 	// Prevent concurrent update cycles
 	cycleMu sync.Mutex
@@ -460,10 +461,26 @@ func runCycle() {
 		return
 	}
 
+	// Circuit breaker: pause if too many consecutive errors.
+	threshold := int64(cfg.CircuitBreakerThreshold)
+	if threshold > 0 && atomic.LoadInt64(&consecutiveErrors) >= threshold {
+		pause := time.Duration(cfg.CircuitBreakerPauseMinutes) * time.Minute
+		msg := fmt.Sprintf("Circuit ouvert (%d erreurs consécutives) — pause de %v avant le prochain cycle.", threshold, pause)
+		log.Warn(msg)
+		showNotification("Circuit ouvert", msg)
+		select {
+		case <-time.After(pause):
+		case <-shutdownCtx.Done():
+			return
+		}
+		atomic.StoreInt64(&consecutiveErrors, 0)
+	}
+
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
 	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff, installPSWindowsUpdateModule); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
+		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
@@ -471,6 +488,7 @@ func runCycle() {
 
 	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff, ensureWindowsUpdateServiceRunning); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
+		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		return
@@ -479,6 +497,7 @@ func runCycle() {
 	updates, err := checkAvailableUpdates()
 	if err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
+		atomic.AddInt64(&consecutiveErrors, 1)
 		// Error already logged inside checkAvailableUpdates
 		return
 	}
@@ -495,11 +514,15 @@ func runCycle() {
 		})
 		if err != nil {
 			atomic.AddInt64(&cycleErrors, 1)
+			atomic.AddInt64(&consecutiveErrors, 1)
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 			showNotification("Erreur", "Erreur globale du processus de mise à jour.")
+			return
 		}
 	}
 
+	// Successful cycle — reset consecutive error counter.
+	atomic.StoreInt64(&consecutiveErrors, 0)
 	log.Debug("Processus terminé.")
 }
 

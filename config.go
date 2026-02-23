@@ -10,21 +10,25 @@ import (
 // Config holds runtime parameters loaded from config.json.
 // All fields are optional — missing keys fall back to defaults.
 type Config struct {
-	CheckIntervalSeconds int `json:"check_interval_seconds"`
-	RetryAttempts        int `json:"retry_attempts"`
-	LogRetentionDays     int `json:"log_retention_days"`
-	MaxLogSizeMB         int `json:"max_log_size_mb"`
-	PSTimeoutMinutes     int `json:"ps_timeout_minutes"`
+	CheckIntervalSeconds      int `json:"check_interval_seconds"`
+	RetryAttempts             int `json:"retry_attempts"`
+	LogRetentionDays          int `json:"log_retention_days"`
+	MaxLogSizeMB              int `json:"max_log_size_mb"`
+	PSTimeoutMinutes          int `json:"ps_timeout_minutes"`
+	CircuitBreakerThreshold   int `json:"circuit_breaker_threshold"`
+	CircuitBreakerPauseMinutes int `json:"circuit_breaker_pause_minutes"`
 }
 
 // defaults returns a Config populated with the built-in default values.
 func defaults() Config {
 	return Config{
-		CheckIntervalSeconds: 60,
-		RetryAttempts:        3,
-		LogRetentionDays:     30,
-		MaxLogSizeMB:         10,
-		PSTimeoutMinutes:     10,
+		CheckIntervalSeconds:      60,
+		RetryAttempts:             3,
+		LogRetentionDays:          30,
+		MaxLogSizeMB:              10,
+		PSTimeoutMinutes:          10,
+		CircuitBreakerThreshold:   5,
+		CircuitBreakerPauseMinutes: 30,
 	}
 }
 
@@ -69,6 +73,12 @@ func loadConfig() Config {
 	if partial.PSTimeoutMinutes > 0 {
 		cfg.PSTimeoutMinutes = partial.PSTimeoutMinutes
 	}
+	if partial.CircuitBreakerThreshold > 0 {
+		cfg.CircuitBreakerThreshold = partial.CircuitBreakerThreshold
+	}
+	if partial.CircuitBreakerPauseMinutes > 0 {
+		cfg.CircuitBreakerPauseMinutes = partial.CircuitBreakerPauseMinutes
+	}
 
 	return cfg
 }
@@ -103,5 +113,11 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.PSTimeoutMinutes < 1 {
 		log.Warnf("config.json : ps_timeout_minutes=%d est trop bas (minimum 1) — valeur par défaut utilisée : 10", cfg.PSTimeoutMinutes)
+	}
+	if cfg.CircuitBreakerThreshold < 1 {
+		log.Warnf("config.json : circuit_breaker_threshold=%d est trop bas (minimum 1) — valeur par défaut utilisée : 5", cfg.CircuitBreakerThreshold)
+	}
+	if cfg.CircuitBreakerPauseMinutes < 1 {
+		log.Warnf("config.json : circuit_breaker_pause_minutes=%d est trop bas (minimum 1) — valeur par défaut utilisée : 30", cfg.CircuitBreakerPauseMinutes)
 	}
 }
