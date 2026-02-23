@@ -21,6 +21,7 @@ let updatesChecked = 0;
 let updatesInstalled = 0;
 let updatesSkipped = 0;
 let isRunning = false;
+let psModuleReady = false;
 
 // Helper function to execute shell commands
 async function execCommand(command) {
@@ -66,8 +67,11 @@ async function isPSWindowsUpdateModuleInstalled() {
 
 // Install the PSWindowsUpdate module if not installed
 async function installPSWindowsUpdateModule() {
+    if (psModuleReady) return;
+
     if (await isPSWindowsUpdateModuleInstalled()) {
         logger.info("Le module PSWindowsUpdate est déjà installé.");
+        psModuleReady = true;
     } else {
         try {
             // Install NuGet provider first to avoid interactive prompts
@@ -81,6 +85,7 @@ async function installPSWindowsUpdateModule() {
             } else {
                 logger.info("Module PSWindowsUpdate installé avec succès.");
                 showNotification("Succès", "Module PSWindowsUpdate installé.");
+                psModuleReady = true;
             }
         } catch (error) {
             logger.error(`Erreur lors de l'installation du module PSWindowsUpdate : ${error}`);
@@ -118,9 +123,9 @@ async function checkAvailableUpdates() {
             return [];
         }
 
-        const updates = JSON.parse(updatesRaw);
+        const updates = [].concat(JSON.parse(updatesRaw));
 
-        if (Array.isArray(updates) && updates.length > 0) {
+        if (updates.length > 0) {
             updates.forEach(update => {
                 logger.info(`Mise à jour disponible :
   - Titre : ${update.Title}
@@ -188,6 +193,9 @@ function generateDailyReport() {
 - Vérifications sans mise à jour : ${updatesSkipped}`;
     logger.info(report);
     showNotification("Rapport quotidien", report);
+    updatesChecked = 0;
+    updatesInstalled = 0;
+    updatesSkipped = 0;
 }
 
 // Main function to orchestrate the update process
