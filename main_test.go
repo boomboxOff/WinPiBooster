@@ -410,6 +410,28 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── parseRebootPending() ─────────────────────────────────────────────────────
+
+func TestParseRebootPending(t *testing.T) {
+	cases := []struct {
+		input string
+		want  bool
+	}{
+		{"True", true},
+		{"True\r\n", true},
+		{"  True  ", true},
+		{"False", false},
+		{"False\r\n", false},
+		{"", false},
+		{"true", false}, // case-sensitive, PowerShell outputs "True"
+	}
+	for _, c := range cases {
+		if got := parseRebootPending(c.input); got != c.want {
+			t.Errorf("parseRebootPending(%q) = %v, want %v", c.input, got, c.want)
+		}
+	}
+}
+
 // ─── dry-run flag parsing ─────────────────────────────────────────────────────
 
 func TestDryRunFlagDetection(t *testing.T) {

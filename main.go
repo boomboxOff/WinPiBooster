@@ -421,6 +421,30 @@ func retryAttempts() int {
 	return 3
 }
 
+// ─── Reboot pending ───────────────────────────────────────────────────────────
+
+// parseRebootPending returns true if the PowerShell output contains "True".
+func parseRebootPending(out string) bool {
+	return strings.Contains(strings.TrimSpace(out), "True")
+}
+
+// isRebootPending checks two common registry keys for a pending Windows reboot.
+func isRebootPending() bool {
+	ps := `$r = $false
+$keys = @(
+  "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending",
+  "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
+)
+foreach ($k in $keys) { if (Test-Path $k) { $r = $true } }
+$r`
+	out, err := execPS(ps)
+	if err != nil {
+		log.Debugf("isRebootPending: erreur PS : %v", err)
+		return false
+	}
+	return parseRebootPending(out)
+}
+
 // ─── Main cycle ───────────────────────────────────────────────────────────────
 
 func runCycle() {
@@ -460,6 +484,12 @@ func runCycle() {
 	}
 
 	if len(updates) > 0 {
+		if isRebootPending() {
+			msg := "Redémarrage en attente détecté — installation des mises à jour reportée au prochain cycle."
+			log.Warn(msg)
+			showNotification("Redémarrage requis", msg)
+			return
+		}
 		err := retryBackoff("installUpdates", retryAttempts(), defaultBackoff, func() error {
 			return installUpdates(updates)
 		})
