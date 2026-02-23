@@ -1012,6 +1012,50 @@ func TestTestNotify_NoPanic(t *testing.T) {
 	}
 }
 
+// ─── weekly report ────────────────────────────────────────────────────────────
+
+func TestBuildWeeklyReport(t *testing.T) {
+	report := buildWeeklyReport(70, 21, 42, 7)
+	for _, want := range []string{"hebdomadaire", "70", "21", "42", "7"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("buildWeeklyReport missing %q, got: %s", want, report)
+		}
+	}
+}
+
+func TestDurationUntilNextSunday_Positive(t *testing.T) {
+	d := durationUntilNextSunday()
+	if d <= 0 || d > 7*24*time.Hour {
+		t.Errorf("durationUntilNextSunday() = %v, want (0, 7d]", d)
+	}
+}
+
+func TestWeeklyCounters_AccumulatedByDaily(t *testing.T) {
+	atomic.StoreInt64(&updatesChecked, 5)
+	atomic.StoreInt64(&updatesInstalled, 2)
+	atomic.StoreInt64(&updatesSkipped, 3)
+	atomic.StoreInt64(&cycleErrors, 1)
+	atomic.StoreInt64(&weeklyChecked, 0)
+	atomic.StoreInt64(&weeklyInstalled, 0)
+	atomic.StoreInt64(&weeklySkipped, 0)
+	atomic.StoreInt64(&weeklyErrors, 0)
+	defer func() {
+		for _, p := range []*int64{&updatesChecked, &updatesInstalled, &updatesSkipped, &cycleErrors,
+			&weeklyChecked, &weeklyInstalled, &weeklySkipped, &weeklyErrors} {
+			atomic.StoreInt64(p, 0)
+		}
+	}()
+
+	generateDailyReport()
+
+	if atomic.LoadInt64(&weeklyChecked) != 5 {
+		t.Errorf("weeklyChecked = %d, want 5", atomic.LoadInt64(&weeklyChecked))
+	}
+	if atomic.LoadInt64(&weeklyInstalled) != 2 {
+		t.Errorf("weeklyInstalled = %d, want 2", atomic.LoadInt64(&weeklyInstalled))
+	}
+}
+
 // ─── tailLogs() ───────────────────────────────────────────────────────────────
 
 func TestTailLogs_LastLines(t *testing.T) {

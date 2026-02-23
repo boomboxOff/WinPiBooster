@@ -31,6 +31,7 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	archiveOldLogs()
 	heartbeat()
 	scheduleDailyReport()
+	scheduleWeeklyReport()
 	go runCycle()
 
 	go func() {
