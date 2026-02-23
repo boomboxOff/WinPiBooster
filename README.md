@@ -1,4 +1,4 @@
-# MajWindowsJs
+# WinPiBooster
 
 Script Node.js de surveillance et d'installation automatique des mises à jour Windows.
 
@@ -20,7 +20,7 @@ Script Node.js de surveillance et d'installation automatique des mises à jour W
 ## Installation
 
 ```bash
-git clone https://github.com/boomboxOff/MajWindowsJs.git
+git clone https://github.com/boomboxOff/WinPiBooster.git
 cd MajWindowsJs
 npm install
 ```
