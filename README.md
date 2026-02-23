@@ -21,18 +21,18 @@ Script Node.js de surveillance et d'installation automatique des mises à jour W
 
 ```bash
 git clone https://github.com/boomboxOff/WinPiBooster.git
-cd MajWindowsJs
+cd WinPiBooster
 npm install
 ```
 
 ## Lancement
 
-Double-cliquer sur `WindowsMAJ.bat` — l'élévation des droits administrateur est demandée automatiquement.
+Double-cliquer sur `WinPiBooster.bat` — l'élévation des droits administrateur est demandée automatiquement.
 
 Ou depuis un terminal en administrateur :
 
 ```bash
-node WindowsMAJ.js
+node WinPiBooster.js
 ```
 
 ## Auto-démarrage avec Windows
@@ -47,7 +47,7 @@ Le Planificateur de tâches Windows lancera le script au démarrage avec les dro
 Pour désinstaller la tâche, depuis un terminal en administrateur :
 
 ```bat
-schtasks /delete /tn MajWindowsJs /f
+schtasks /delete /tn WinPiBooster /f
 ```
 
 ## Logs
@@ -69,7 +69,7 @@ Pour activer les logs verbeux sans modifier le code :
 
 ```bat
 SET DEBUG=true
-node WindowsMAJ.js
+node WinPiBooster.js
 ```
 
 ## Dépendances

@@ -242,7 +242,7 @@ async function checkAdminRights() {
     try {
         await execCommand('net session');
     } catch {
-        logger.error("Le script doit être exécuté en tant qu'administrateur. Relancez via WindowsMAJ.bat en tant qu'administrateur.");
+        logger.error("Le script doit être exécuté en tant qu'administrateur. Relancez via WinPiBooster.bat en tant qu'administrateur.");
         showNotification("Erreur", "Droits administrateur requis. Relancez en tant qu'administrateur.");
         process.exit(1);
     }
