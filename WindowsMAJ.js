@@ -20,11 +20,12 @@ const logger = createLogger({
 let updatesChecked = 0;
 let updatesInstalled = 0;
 let updatesSkipped = 0;
+let isRunning = false;
 
 // Helper function to execute shell commands
 async function execCommand(command) {
     return new Promise((resolve, reject) => {
-        exec(command, { maxBuffer: 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
+        exec(command, { maxBuffer: 10 * 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
             if (error) reject(stderr || error.message);
             else resolve(stdout.trim());
         });
@@ -39,22 +40,6 @@ function showNotification(title, message) {
         sound: true,
         wait: false
     });
-}
-
-// Verify initial conditions: log directory and required modules
-function verifyInitialConditions() {
-    const logDir = path.join(__dirname);
-    if (!fs.existsSync(logDir)) {
-        try {
-            fs.mkdirSync(logDir, { recursive: true });
-            logger.info("Répertoire des journaux créé avec succès.");
-        } catch (err) {
-            logger.error(`Erreur lors de la création du répertoire des journaux : ${err.message}`);
-            process.exit(1);
-        }
-    }
-
-    logger.info("Vérification initiale des conditions réussie.");
 }
 
 // Install NuGet provider if not already installed
@@ -172,7 +157,7 @@ ${result}`);
     }
 }
 
-// Archive old logs
+// Archive old logs and delete archives older than 30 days
 function archiveOldLogs() {
     const logFile = path.join(__dirname, 'UpdateLog.txt');
     const archiveFile = path.join(__dirname, `UpdateLog_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
@@ -180,6 +165,19 @@ function archiveOldLogs() {
         fs.renameSync(logFile, archiveFile);
         logger.info("Journal archivé.");
     }
+
+    const maxAgeDays = 30;
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    fs.readdirSync(__dirname)
+        .filter(f => f.startsWith('UpdateLog_') && f.endsWith('.txt'))
+        .forEach(f => {
+            const filePath = path.join(__dirname, f);
+            const { mtimeMs } = fs.statSync(filePath);
+            if (mtimeMs < cutoff) {
+                fs.unlinkSync(filePath);
+                logger.info(`Ancien journal supprimé : ${f}`);
+            }
+        });
 }
 
 // Generate daily report
@@ -194,8 +192,12 @@ function generateDailyReport() {
 
 // Main function to orchestrate the update process
 async function main() {
+    if (isRunning) {
+        logger.info("Cycle précédent toujours en cours, passage ignoré.");
+        return;
+    }
+    isRunning = true;
     logger.info("Lancement du processus de mise à jour Windows...");
-    verifyInitialConditions();
     archiveOldLogs();
 
     try {
@@ -209,9 +211,10 @@ async function main() {
     } catch (error) {
         logger.error(`Erreur globale du processus de mise à jour : ${error}`);
         showNotification("Erreur", "Erreur globale du processus de mise à jour.");
+    } finally {
+        isRunning = false;
+        logger.info("Processus terminé.");
     }
-
-    logger.info("Processus terminé.");
 }
 
 // Schedule periodic updates
