@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/boomboxOff/WinPiBooster/actions/workflows/ci.yml/badge.svg)
 
-Binaire Windows de surveillance et d'installation automatique des mises à jour Windows pour un nœud Pi Network.
+Binaire Windows de surveillance et d'installation automatique des mises à jour Windows.
 
 ## Fonctionnement
 

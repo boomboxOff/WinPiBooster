@@ -13,7 +13,7 @@ import (
 
 const serviceName = "WinPiBooster"
 const serviceDisplayName = "WinPiBooster — Windows Update Monitor"
-const serviceDescription = "Surveille et installe automatiquement les mises à jour Windows pour le nœud Pi Network."
+const serviceDescription = "Surveille et installe automatiquement les mises à jour Windows."
 
 // ─── Service handler ──────────────────────────────────────────────────────────
 
