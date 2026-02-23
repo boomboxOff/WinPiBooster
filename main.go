@@ -515,6 +515,30 @@ func runInteractive() {
 	cycleTicker.Stop()
 }
 
+// ─── Help ─────────────────────────────────────────────────────────────────────
+
+func printHelp() {
+	fmt.Printf(`WinPiBooster %s — surveillance et installation automatique des mises à jour Windows
+
+Usage:
+  WinPiBooster.exe                   Mode interactif (console, Ctrl+C pour quitter)
+  WinPiBooster.exe install           Installe le service Windows (démarrage automatique)
+  WinPiBooster.exe start             Démarre le service
+  WinPiBooster.exe stop              Arrête le service
+  WinPiBooster.exe remove            Désinstalle le service
+  WinPiBooster.exe status            Affiche l'état du service
+  WinPiBooster.exe version           Affiche la version
+  WinPiBooster.exe help              Affiche cette aide
+
+Logs:
+  UpdateLog.txt dans le répertoire de l'exécutable.
+  Rotation quotidienne à minuit, archives conservées %d jours.
+
+Variables d'environnement:
+  DEBUG=true    Active les logs verbeux.
+`, version, cfg.LogRetentionDays)
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 func main() {
@@ -573,6 +597,8 @@ func main() {
 		}
 	case "version":
 		fmt.Printf("WinPiBooster %s\n", version)
+	case "help":
+		printHelp()
 	case "run":
 		// Launched by the SCM — run as a Windows service
 		if err := svc.Run(serviceName, &winService{}); err != nil {

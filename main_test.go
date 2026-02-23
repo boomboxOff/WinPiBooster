@@ -222,6 +222,23 @@ func TestLoadConfig_Invalid(t *testing.T) {
 	}
 }
 
+// ─── printHelp() ──────────────────────────────────────────────────────────────
+
+func TestPrintHelp_NoPanic(t *testing.T) {
+	// Redirect stdout to discard output; just verify no panic.
+	old := os.Stdout
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("OpenFile: %v", err)
+	}
+	os.Stdout = devNull
+	defer func() {
+		os.Stdout = old
+		devNull.Close()
+	}()
+	printHelp()
+}
+
 // ─── min() ────────────────────────────────────────────────────────────────────
 
 func TestMin(t *testing.T) {
