@@ -9,7 +9,8 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "description": "",
+  "description": "Script de surveillance et d'installation automatique des mises à jour Windows pour node Pi Network",
+  "author": "boomboxOff",
   "dependencies": {
     "node-notifier": "^10.0.1",
     "winston": "^3.17.0"

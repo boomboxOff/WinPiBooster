@@ -129,7 +129,14 @@ async function checkAvailableUpdates() {
             return [];
         }
 
-        const updates = [].concat(JSON.parse(updatesRaw));
+        let updates;
+        try {
+            updates = [].concat(JSON.parse(updatesRaw));
+        } catch {
+            logger.error(`Réponse PowerShell invalide (JSON malformé) : ${updatesRaw.slice(0, 200)}`);
+            updatesSkipped++;
+            return [];
+        }
 
         if (updates.length > 0) {
             updates.forEach(update => {
