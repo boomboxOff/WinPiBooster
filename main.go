@@ -677,12 +677,14 @@ func runDryRun() {
 
 	if len(updates) == 0 {
 		fmt.Println("[DRY-RUN] Aucune mise à jour disponible.")
-		return
+		os.Exit(0)
 	}
 	fmt.Printf("[DRY-RUN] %d mise(s) à jour disponible(s) :\n", len(updates))
 	for _, u := range updates {
 		fmt.Printf("  - %s (KB%s)\n", u.Title, u.KB())
 	}
+	// Exit code 2 signals "updates are available" to callers/scripts.
+	os.Exit(2)
 }
 
 // runInteractive runs the update loop in console mode (SIGINT/SIGTERM aware).
@@ -782,6 +784,11 @@ Usage:
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe help              Affiche cette aide
+
+Codes de sortie:
+  0   Succès (ou aucune mise à jour disponible en mode --dry-run)
+  1   Erreur
+  2   Des mises à jour sont disponibles (mode --dry-run uniquement)
 
 Logs:
   UpdateLog.txt dans le répertoire de l'exécutable.
