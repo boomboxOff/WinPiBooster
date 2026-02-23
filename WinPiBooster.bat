@@ -5,4 +5,4 @@ if %errorlevel% neq 0 (
     exit /b
 )
 cd "%~dp0"
-start "WinPiBooster" "%ProgramFiles%\nodejs\node.exe" WinPiBooster.js
+start "WinPiBooster" "%~dp0WinPiBooster.exe"
