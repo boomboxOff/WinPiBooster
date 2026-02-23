@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ─── Update.KB() ──────────────────────────────────────────────────────────────
@@ -145,6 +147,27 @@ func TestDefaults(t *testing.T) {
 	if cfg.LogRetentionDays != 30 {
 		t.Errorf("LogRetentionDays = %d, want 30", cfg.LogRetentionDays)
 	}
+	if cfg.MaxLogSizeMB != 10 {
+		t.Errorf("MaxLogSizeMB = %d, want 10", cfg.MaxLogSizeMB)
+	}
+}
+
+func TestLoadConfig_MaxLogSizeMB(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+
+	if err := os.WriteFile(p, []byte(`{"max_log_size_mb": 50}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg := loadConfig()
+	if cfg.MaxLogSizeMB != 50 {
+		t.Errorf("MaxLogSizeMB = %d, want 50", cfg.MaxLogSizeMB)
+	}
+	// Other fields stay at defaults
+	if cfg.LogRetentionDays != 30 {
+		t.Errorf("LogRetentionDays = %d, want 30 (default)", cfg.LogRetentionDays)
+	}
 }
 
 func TestConfigCheckInterval(t *testing.T) {
@@ -219,6 +242,80 @@ func TestLoadConfig_Invalid(t *testing.T) {
 	}
 	if cfg.RetryAttempts != d.RetryAttempts {
 		t.Errorf("RetryAttempts = %d, want %d (default)", cfg.RetryAttempts, d.RetryAttempts)
+	}
+}
+
+// ─── fileHook size rotation ───────────────────────────────────────────────────
+
+func TestFileHook_SizeRotation(t *testing.T) {
+	tmp, err := os.CreateTemp("", "testlog*.txt")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+
+	rotated := make(chan struct{}, 1)
+	h := &fileHook{
+		file:         tmp,
+		logPath:      tmp.Name(),
+		levels:       []logrus.Level{logrus.InfoLevel},
+		maxSizeBytes: 50, // tiny limit
+		rotateFn: func() {
+			select {
+			case rotated <- struct{}{}:
+			default:
+			}
+		},
+	}
+
+	entry := &logrus.Entry{
+		Logger:  logrus.New(),
+		Level:   logrus.InfoLevel,
+		Time:    time.Now(),
+		Message: strings.Repeat("x", 60), // well above the 50-byte limit
+	}
+
+	if err := h.Fire(entry); err != nil {
+		t.Fatalf("Fire: %v", err)
+	}
+
+	select {
+	case <-rotated:
+		// expected
+	case <-time.After(time.Second):
+		t.Error("rotateFn was not called within 1 second")
+	}
+}
+
+func TestFileHook_NoRotationBelowLimit(t *testing.T) {
+	tmp, err := os.CreateTemp("", "testlog*.txt")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+
+	called := false
+	h := &fileHook{
+		file:         tmp,
+		logPath:      tmp.Name(),
+		levels:       []logrus.Level{logrus.InfoLevel},
+		maxSizeBytes: 10 * 1024 * 1024, // 10 MB — way above what we'll write
+		rotateFn:     func() { called = true },
+	}
+
+	entry := &logrus.Entry{
+		Logger:  logrus.New(),
+		Level:   logrus.InfoLevel,
+		Time:    time.Now(),
+		Message: "short",
+	}
+
+	if err := h.Fire(entry); err != nil {
+		t.Fatalf("Fire: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond) // let any goroutine run
+	if called {
+		t.Error("rotateFn should not have been called for small log")
 	}
 }
 

@@ -480,9 +480,16 @@ func initLogger() error {
 	}
 	cfg = loadConfig()
 	if cfg != defaults() {
-		log.Debugf("Configuration chargée depuis config.json : interval=%ds retries=%d retention=%dj",
-			cfg.CheckIntervalSeconds, cfg.RetryAttempts, cfg.LogRetentionDays)
+		log.Debugf("Configuration chargée depuis config.json : interval=%ds retries=%d retention=%dj maxsize=%dMB",
+			cfg.CheckIntervalSeconds, cfg.RetryAttempts, cfg.LogRetentionDays, cfg.MaxLogSizeMB)
 	}
+
+	// Wire size-based log rotation.
+	if logHook != nil && cfg.MaxLogSizeMB > 0 {
+		logHook.maxSizeBytes = int64(cfg.MaxLogSizeMB) * 1024 * 1024
+		logHook.rotateFn = archiveOldLogs
+	}
+
 	return nil
 }
 

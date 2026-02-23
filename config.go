@@ -13,6 +13,7 @@ type Config struct {
 	CheckIntervalSeconds int `json:"check_interval_seconds"`
 	RetryAttempts        int `json:"retry_attempts"`
 	LogRetentionDays     int `json:"log_retention_days"`
+	MaxLogSizeMB         int `json:"max_log_size_mb"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -21,6 +22,7 @@ func defaults() Config {
 		CheckIntervalSeconds: 60,
 		RetryAttempts:        3,
 		LogRetentionDays:     30,
+		MaxLogSizeMB:         10,
 	}
 }
 
@@ -58,6 +60,9 @@ func loadConfig() Config {
 	}
 	if partial.LogRetentionDays > 0 {
 		cfg.LogRetentionDays = partial.LogRetentionDays
+	}
+	if partial.MaxLogSizeMB > 0 {
+		cfg.MaxLogSizeMB = partial.MaxLogSizeMB
 	}
 
 	return cfg

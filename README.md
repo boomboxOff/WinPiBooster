@@ -10,7 +10,7 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 - Installe automatiquement les mises à jour détectées avec redémarrage automatique si nécessaire
 - Envoie des **notifications Windows toast** à chaque événement clé (installation, erreur, rapport)
 - Génère un **rapport quotidien à minuit** avec remise à zéro des compteurs
-- Archive les logs à chaque lancement et supprime les archives de plus de **30 jours**
+- Archive les logs à chaque lancement, lors d'un dépassement de taille (**10 MB** par défaut) et supprime les archives de plus de **30 jours**
 - Envoie un **heartbeat toutes les heures** dans les logs pour confirmer que le script est actif
 
 ## Prérequis
@@ -69,7 +69,26 @@ Le service est visible dans `services.msc` et gérable via `sc.exe`.
 
 ## Logs
 
-Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog_<timestamp>.txt` à chaque lancement. Les archives de plus de 30 jours sont supprimées automatiquement.
+Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog_<timestamp>.txt` :
+- à chaque lancement
+- automatiquement quand `UpdateLog.txt` dépasse la taille limite (défaut 10 MB)
+
+Les archives de plus de 30 jours sont supprimées automatiquement.
+
+### Configuration optionnelle
+
+Créer `config.json` dans le même répertoire que `WinPiBooster.exe` :
+
+```json
+{
+  "check_interval_seconds": 60,
+  "retry_attempts": 3,
+  "log_retention_days": 30,
+  "max_log_size_mb": 10
+}
+```
+
+Toutes les clés sont optionnelles — les valeurs manquantes utilisent les valeurs par défaut ci-dessus.
 
 **Format fichier** (plain text) :
 ```

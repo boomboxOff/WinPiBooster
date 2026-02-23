@@ -73,10 +73,13 @@ func levelUpper(s string) string {
 
 // fileHook is a logrus hook that writes plain-text log entries to UpdateLog.txt
 type fileHook struct {
-	mu       sync.Mutex
-	file     *os.File
-	logPath  string
-	levels   []logrus.Level
+	mu           sync.Mutex
+	file         *os.File
+	logPath      string
+	levels       []logrus.Level
+	maxSizeBytes int64      // 0 = disabled
+	rotateFn     func()     // called when max size is exceeded
+	rotateMu     sync.Mutex // prevents concurrent rotations
 }
 
 func newFileHook(logPath string, levels []logrus.Level) (*fileHook, error) {
@@ -93,14 +96,35 @@ func (h *fileHook) Levels() []logrus.Level {
 
 func (h *fileHook) Fire(entry *logrus.Entry) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 
 	formatter := &plainFileFormatter{}
 	line, err := formatter.Format(entry)
 	if err != nil {
+		h.mu.Unlock()
 		return err
 	}
 	_, err = h.file.Write(line)
+
+	// Check size-based rotation while holding the lock.
+	var shouldRotate bool
+	if err == nil && h.maxSizeBytes > 0 && h.rotateFn != nil {
+		if info, statErr := h.file.Stat(); statErr == nil && info.Size() >= h.maxSizeBytes {
+			shouldRotate = true
+		}
+	}
+
+	h.mu.Unlock()
+
+	if shouldRotate {
+		go func() {
+			if !h.rotateMu.TryLock() {
+				return // rotation already in progress
+			}
+			defer h.rotateMu.Unlock()
+			h.rotateFn()
+		}()
+	}
+
 	return err
 }
 
