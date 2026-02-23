@@ -157,7 +157,9 @@ func showNotification(title, message string) {
 		Audio:   toast.Default,
 	}
 	if err := n.Push(); err != nil {
-		log.Debugf("Notification non envoyée : %v", err)
+		if log != nil {
+			log.Debugf("Notification non envoyée : %v", err)
+		}
 	}
 }
 
