@@ -758,6 +758,49 @@ func openLogs() {
 	}
 }
 
+// printExtendedStatus prints service state plus config, log size, and last_check.
+func printExtendedStatus() {
+	// Service state (from SCM)
+	if err := statusService(); err != nil {
+		fmt.Fprintln(os.Stderr, "Erreur:", err)
+	}
+
+	// Configuration
+	fmt.Printf("\nConfiguration (config.json) :\n")
+	fmt.Printf("  check_interval_seconds       : %d\n", cfg.CheckIntervalSeconds)
+	fmt.Printf("  retry_attempts               : %d\n", cfg.RetryAttempts)
+	fmt.Printf("  log_retention_days           : %d\n", cfg.LogRetentionDays)
+	fmt.Printf("  max_log_size_mb              : %d\n", cfg.MaxLogSizeMB)
+	fmt.Printf("  ps_timeout_minutes           : %d\n", cfg.PSTimeoutMinutes)
+	fmt.Printf("  cmd_timeout_seconds          : %d\n", cfg.CmdTimeoutSeconds)
+	fmt.Printf("  circuit_breaker_threshold    : %d\n", cfg.CircuitBreakerThreshold)
+	fmt.Printf("  circuit_breaker_pause_minutes: %d\n", cfg.CircuitBreakerPauseMinutes)
+
+	// Log file size
+	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	if info, err := os.Stat(logPath); err == nil {
+		fmt.Printf("\nFichier de log :\n  UpdateLog.txt : %.1f KB\n", float64(info.Size())/1024.0)
+	} else {
+		fmt.Printf("\nFichier de log :\n  UpdateLog.txt : absent\n")
+	}
+
+	// Last cycle info from status.json
+	statusPath := filepath.Join(logDir, "status.json")
+	if data, err := os.ReadFile(statusPath); err == nil {
+		var s statusJSON
+		if json.Unmarshal(data, &s) == nil {
+			fmt.Printf("\nDernière vérification (status.json) :\n")
+			fmt.Printf("  last_check         : %s\n", s.LastCheck)
+			fmt.Printf("  updates_checked    : %d\n", s.UpdatesChecked)
+			fmt.Printf("  updates_installed  : %d\n", s.UpdatesInstalled)
+			fmt.Printf("  updates_skipped    : %d\n", s.UpdatesSkipped)
+			fmt.Printf("  cycle_errors       : %d\n", s.CycleErrors)
+		}
+	} else {
+		fmt.Printf("\nDernière vérification (status.json) : absent\n")
+	}
+}
+
 // printReport prints the current counters without resetting them.
 func printReport() {
 	checked := atomic.LoadInt64(&updatesChecked)
@@ -862,10 +905,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "status":
-		if err := statusService(); err != nil {
-			fmt.Fprintln(os.Stderr, "Erreur:", err)
-			os.Exit(1)
-		}
+		printExtendedStatus()
 	case "clean-logs":
 		cleanOldLogsVerbose(true)
 	case "logs":
