@@ -554,7 +554,17 @@ func runInteractive() {
 	cycleTicker.Stop()
 }
 
-// ─── Help ─────────────────────────────────────────────────────────────────────
+// ─── Report / Help ────────────────────────────────────────────────────────────
+
+// printReport prints the current counters without resetting them.
+func printReport() {
+	checked := atomic.LoadInt64(&updatesChecked)
+	installed := atomic.LoadInt64(&updatesInstalled)
+	skipped := atomic.LoadInt64(&updatesSkipped)
+	errors := atomic.LoadInt64(&cycleErrors)
+	fmt.Printf("Rapport courant (%s) :\n- Vérifications totales   : %d\n- Mises à jour installées : %d\n- Sans mise à jour        : %d\n- Erreurs                 : %d\n",
+		time.Now().Format("2006-01-02 15:04:05"), checked, installed, skipped, errors)
+}
 
 func printHelp() {
 	fmt.Printf(`WinPiBooster %s — surveillance et installation automatique des mises à jour Windows
@@ -566,6 +576,7 @@ Usage:
   WinPiBooster.exe stop              Arrête le service
   WinPiBooster.exe remove            Désinstalle le service
   WinPiBooster.exe status            Affiche l'état du service
+  WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe help              Affiche cette aide
 
@@ -634,6 +645,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Erreur:", err)
 			os.Exit(1)
 		}
+	case "report":
+		printReport()
 	case "version":
 		fmt.Printf("WinPiBooster %s\n", version)
 	case "help":

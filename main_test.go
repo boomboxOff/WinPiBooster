@@ -354,6 +354,43 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── printReport() ────────────────────────────────────────────────────────────
+
+func TestPrintReport_NoPanic(t *testing.T) {
+	// Set known counter values, verify output contains them.
+	atomic.StoreInt64(&updatesChecked, 5)
+	atomic.StoreInt64(&updatesInstalled, 2)
+	atomic.StoreInt64(&updatesSkipped, 3)
+	atomic.StoreInt64(&cycleErrors, 1)
+	defer func() {
+		atomic.StoreInt64(&updatesChecked, 0)
+		atomic.StoreInt64(&updatesInstalled, 0)
+		atomic.StoreInt64(&updatesSkipped, 0)
+		atomic.StoreInt64(&cycleErrors, 0)
+	}()
+
+	// Capture stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	printReport()
+	w.Close()
+	os.Stdout = old
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	for _, want := range []string{"5", "2", "3", "1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("printReport output missing %q\ngot: %s", want, out)
+		}
+	}
+}
+
 // ─── shutdownCtx ──────────────────────────────────────────────────────────────
 
 func TestShutdownCtx_InitiallyNotDone(t *testing.T) {
