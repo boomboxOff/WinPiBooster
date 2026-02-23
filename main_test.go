@@ -246,6 +246,40 @@ func TestLoadConfig_Invalid(t *testing.T) {
 	}
 }
 
+// ─── validateConfig() ─────────────────────────────────────────────────────────
+
+func TestValidateConfig_ValidDefaults(t *testing.T) {
+	// defaults() should produce zero warnings — no panic expected
+	validateConfig(defaults())
+}
+
+func TestValidateConfig_IntervalTooLow(t *testing.T) {
+	cfg := defaults()
+	cfg.CheckIntervalSeconds = 5 // below minimum 10
+	// validateConfig requires log != nil to emit warnings; with nil log it must not panic
+	validateConfig(cfg)
+}
+
+func TestValidateConfig_RetryOutOfRange(t *testing.T) {
+	cfg := defaults()
+	cfg.RetryAttempts = 0
+	validateConfig(cfg)
+	cfg.RetryAttempts = 11
+	validateConfig(cfg)
+}
+
+func TestValidateConfig_RetentionTooLow(t *testing.T) {
+	cfg := defaults()
+	cfg.LogRetentionDays = 0
+	validateConfig(cfg)
+}
+
+func TestValidateConfig_SizeTooLow(t *testing.T) {
+	cfg := defaults()
+	cfg.MaxLogSizeMB = 0
+	validateConfig(cfg)
+}
+
 // ─── buildDailyReport / cycleErrors ───────────────────────────────────────────
 
 func TestBuildDailyReport_IncludesAllFields(t *testing.T) {

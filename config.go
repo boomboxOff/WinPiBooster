@@ -72,3 +72,23 @@ func loadConfig() Config {
 func (c Config) CheckInterval() time.Duration {
 	return time.Duration(c.CheckIntervalSeconds) * time.Second
 }
+
+// validateConfig logs a WARN for each field that is outside its acceptable range.
+// It does NOT modify cfg — callers should rely on loadConfig() defaults instead.
+func validateConfig(cfg Config) {
+	if log == nil {
+		return
+	}
+	if cfg.CheckIntervalSeconds < 10 {
+		log.Warnf("config.json : check_interval_seconds=%d est trop bas (minimum 10) — valeur par défaut utilisée : 60", cfg.CheckIntervalSeconds)
+	}
+	if cfg.RetryAttempts < 1 || cfg.RetryAttempts > 10 {
+		log.Warnf("config.json : retry_attempts=%d hors plage [1-10] — valeur par défaut utilisée : 3", cfg.RetryAttempts)
+	}
+	if cfg.LogRetentionDays < 1 {
+		log.Warnf("config.json : log_retention_days=%d est trop bas (minimum 1) — valeur par défaut utilisée : 30", cfg.LogRetentionDays)
+	}
+	if cfg.MaxLogSizeMB < 1 {
+		log.Warnf("config.json : max_log_size_mb=%d est trop bas (minimum 1) — valeur par défaut utilisée : 10", cfg.MaxLogSizeMB)
+	}
+}

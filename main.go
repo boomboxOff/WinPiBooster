@@ -492,6 +492,7 @@ func initLogger() error {
 		return err
 	}
 	cfg = loadConfig()
+	validateConfig(cfg)
 	if cfg != defaults() {
 		log.Debugf("Configuration chargée depuis config.json : interval=%ds retries=%d retention=%dj maxsize=%dMB",
 			cfg.CheckIntervalSeconds, cfg.RetryAttempts, cfg.LogRetentionDays, cfg.MaxLogSizeMB)
