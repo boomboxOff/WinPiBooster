@@ -236,6 +236,17 @@ async function main() {
     }
 }
 
+// Check administrator rights
+async function checkAdminRights() {
+    try {
+        await execCommand('net session');
+    } catch {
+        logger.error("Le script doit être exécuté en tant qu'administrateur. Relancez via WindowsMAJ.bat en tant qu'administrateur.");
+        showNotification("Erreur", "Droits administrateur requis. Relancez en tant qu'administrateur.");
+        process.exit(1);
+    }
+}
+
 // Graceful shutdown
 process.on('SIGINT', () => {
     logger.info("Arrêt du script demandé (SIGINT).");
@@ -251,12 +262,15 @@ function heartbeat() {
     logger.info('─'.repeat(62));
     logger.info("Script actif — surveillance des mises à jour Windows en cours.");
 }
-heartbeat();
-setInterval(heartbeat, 60 * 60 * 1000);
 
 // Schedule periodic updates
 const checkInterval = 60 * 1000; // Vérification toutes les minutes
-main();
+
+checkAdminRights().then(() => {
+    heartbeat();
+    setInterval(heartbeat, 60 * 60 * 1000);
+    main();
+});
 setInterval(() => {
     logger.debug("Début d'un nouveau cycle de vérification des mises à jour.");
     main();
