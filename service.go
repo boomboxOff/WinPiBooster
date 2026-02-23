@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
@@ -99,6 +100,11 @@ func installService() error {
 	}
 	defer s.Close()
 
+	// Register Event Log source
+	if err := eventlog.InstallAsEventCreate(serviceName, eventlog.Error|eventlog.Warning|eventlog.Info); err != nil {
+		fmt.Printf("Avertissement : impossible d'enregistrer la source Event Log : %v\n", err)
+	}
+
 	fmt.Printf("Service %q installé avec succès.\n", serviceName)
 	fmt.Println("Démarrez-le avec : WinPiBooster.exe start")
 	return nil
@@ -120,6 +126,12 @@ func removeService() error {
 	if err := s.Delete(); err != nil {
 		return fmt.Errorf("cannot delete service: %w", err)
 	}
+
+	// Remove Event Log source
+	if err := eventlog.Remove(serviceName); err != nil {
+		fmt.Printf("Avertissement : impossible de supprimer la source Event Log : %v\n", err)
+	}
+
 	fmt.Printf("Service %q supprimé.\n", serviceName)
 	return nil
 }

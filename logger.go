@@ -10,6 +10,7 @@ import (
 
 	"github.com/mattn/go-colorable"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows/svc/eventlog"
 )
 
 // ANSI color codes for console output
@@ -173,11 +174,53 @@ func setupLogger() (*logrus.Logger, *fileHook, error) {
 		levels:    allLevels,
 	})
 
+	// Event Log hook (best-effort — only available after WinPiBooster.exe install)
+	if elHook, err := newEventLogHook("WinPiBooster"); err == nil {
+		log.AddHook(elHook)
+	}
+
 	// Suppress default output
 	log.SetFormatter(&logrus.TextFormatter{DisableColors: true})
 
 	_ = time.Now() // keep time import used
 	return log, hook, nil
+}
+
+// eventLogHook writes ERROR/FATAL/PANIC entries to the Windows Event Log.
+type eventLogHook struct {
+	elog *eventlog.Log
+}
+
+func newEventLogHook(source string) (*eventLogHook, error) {
+	elog, err := eventlog.Open(source)
+	if err != nil {
+		return nil, err
+	}
+	return &eventLogHook{elog: elog}, nil
+}
+
+func (h *eventLogHook) Levels() []logrus.Level {
+	return []logrus.Level{logrus.PanicLevel, logrus.FatalLevel, logrus.ErrorLevel}
+}
+
+func (h *eventLogHook) Fire(entry *logrus.Entry) error {
+	msg, err := entry.String()
+	if err != nil {
+		return err
+	}
+	switch entry.Level {
+	case logrus.ErrorLevel:
+		return h.elog.Error(1, msg)
+	case logrus.FatalLevel, logrus.PanicLevel:
+		return h.elog.Error(2, msg)
+	}
+	return nil
+}
+
+func (h *eventLogHook) Close() {
+	if h.elog != nil {
+		h.elog.Close()
+	}
 }
 
 // consoleHook writes coloured log lines to an io.Writer (stdout).
