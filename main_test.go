@@ -809,6 +809,49 @@ func TestValidateConfig_LogLevel_Valid(t *testing.T) {
 	}
 }
 
+// ─── resetCounters() ──────────────────────────────────────────────────────────
+
+func TestResetCounters(t *testing.T) {
+	oldDir := logDir
+	logDir = t.TempDir()
+	defer func() { logDir = oldDir }()
+
+	atomic.StoreInt64(&updatesChecked, 5)
+	atomic.StoreInt64(&updatesInstalled, 2)
+	atomic.StoreInt64(&updatesSkipped, 3)
+	atomic.StoreInt64(&cycleErrors, 1)
+	atomic.StoreInt64(&consecutiveErrors, 4)
+	lastInstalledMu.Lock()
+	lastInstalled = []installEntry{{KB: "KB1", Title: "T", InstalledAt: "2026-01-01T00:00:00Z"}}
+	lastInstalledMu.Unlock()
+
+	// Redirect stdout
+	r, w, _ := os.Pipe()
+	old := os.Stdout
+	os.Stdout = w
+	resetCounters()
+	w.Close()
+	os.Stdout = old
+	buf := make([]byte, 128)
+	n, _ := r.Read(buf)
+	if !strings.Contains(string(buf[:n]), "zéro") {
+		t.Errorf("expected confirmation message, got: %s", string(buf[:n]))
+	}
+
+	if atomic.LoadInt64(&updatesChecked) != 0 {
+		t.Error("updatesChecked should be 0")
+	}
+	if atomic.LoadInt64(&consecutiveErrors) != 0 {
+		t.Error("consecutiveErrors should be 0")
+	}
+	lastInstalledMu.Lock()
+	n2 := len(lastInstalled)
+	lastInstalledMu.Unlock()
+	if n2 != 0 {
+		t.Errorf("lastInstalled len = %d, want 0", n2)
+	}
+}
+
 // ─── testNotify() ─────────────────────────────────────────────────────────────
 
 func TestTestNotify_NoPanic(t *testing.T) {

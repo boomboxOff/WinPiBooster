@@ -887,6 +887,20 @@ func printExtendedStatus() {
 	}
 }
 
+// resetCounters zeroes all atomic counters, clears the install history, and rewrites status.json.
+func resetCounters() {
+	atomic.StoreInt64(&updatesChecked, 0)
+	atomic.StoreInt64(&updatesInstalled, 0)
+	atomic.StoreInt64(&updatesSkipped, 0)
+	atomic.StoreInt64(&cycleErrors, 0)
+	atomic.StoreInt64(&consecutiveErrors, 0)
+	lastInstalledMu.Lock()
+	lastInstalled = nil
+	lastInstalledMu.Unlock()
+	writeStatusJSON()
+	fmt.Println("Compteurs remis à zéro.")
+}
+
 // printReport prints the current counters without resetting them.
 func printReport() {
 	checked := atomic.LoadInt64(&updatesChecked)
@@ -913,6 +927,7 @@ Usage:
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe test-notify       Envoie une notification toast de test
+  WinPiBooster.exe reset-counters    Remet les compteurs à zéro et réécrit status.json
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe help              Affiche cette aide
 
@@ -1004,6 +1019,8 @@ func main() {
 		printReport()
 	case "test-notify":
 		testNotify()
+	case "reset-counters":
+		resetCounters()
 	case "version":
 		fmt.Printf("WinPiBooster %s\n", version)
 	case "help":
