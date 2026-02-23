@@ -92,5 +92,5 @@ WinPiBooster.exe
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.1.1" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.3.0" -o WinPiBooster.exe .
 ```
