@@ -248,6 +248,18 @@ async function checkAdminRights() {
     }
 }
 
+// Unhandled errors
+process.on('uncaughtException', (error) => {
+    logger.error(`Exception non catchée — arrêt du script : ${error.message}`);
+    showNotification("Erreur fatale", `Exception non catchée : ${error.message}`);
+    process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    logger.error(`Rejet de Promise non catchée — arrêt du script : ${reason}`);
+    showNotification("Erreur fatale", `Promise rejetée : ${reason}`);
+    process.exit(1);
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
     logger.info("Arrêt du script demandé (SIGINT).");
