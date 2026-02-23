@@ -716,6 +716,69 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 	printHelp()
 }
 
+// ─── listLogs() ───────────────────────────────────────────────────────────────
+
+func TestListLogs_ShowsFiles(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Create current log + one archive.
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("current"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog_2026-01-01.txt"), []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old2 := os.Stdout
+	os.Stdout = w
+	listLogs()
+	w.Close()
+	os.Stdout = old2
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "UpdateLog.txt") {
+		t.Errorf("expected UpdateLog.txt in output, got: %s", out)
+	}
+	if !strings.Contains(out, "UpdateLog_2026-01-01.txt") {
+		t.Errorf("expected archive in output, got: %s", out)
+	}
+}
+
+func TestListLogs_NoFiles(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old2 := os.Stdout
+	os.Stdout = w
+	listLogs()
+	w.Close()
+	os.Stdout = old2
+
+	buf := make([]byte, 256)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "Aucun fichier de log") {
+		t.Errorf("expected 'Aucun fichier de log' in output, got: %s", out)
+	}
+}
+
 // ─── acquireSingleInstanceMutex() ────────────────────────────────────────────
 
 func TestAcquireSingleInstanceMutex_FirstSucceeds(t *testing.T) {

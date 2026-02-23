@@ -746,6 +746,36 @@ func runInteractive() {
 
 // ─── Report / Help ────────────────────────────────────────────────────────────
 
+// listLogs prints all log files (current + archives) with size and modification date.
+func listLogs() {
+	// Current log
+	current := filepath.Join(logDir, "UpdateLog.txt")
+	entries := []string{current}
+
+	// Archives
+	pattern := filepath.Join(logDir, "UpdateLog_*.txt")
+	archives, err := filepath.Glob(pattern)
+	if err == nil {
+		entries = append(entries, archives...)
+	}
+
+	found := false
+	for _, p := range entries {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		found = true
+		fmt.Printf("  %-40s  %8.1f KB  %s\n",
+			filepath.Base(p),
+			float64(info.Size())/1024.0,
+			info.ModTime().Format("2006-01-02 15:04:05"))
+	}
+	if !found {
+		fmt.Printf("Aucun fichier de log dans %s\n", logDir)
+	}
+}
+
 // openLogs opens UpdateLog.txt in Notepad.
 func openLogs() {
 	logPath := filepath.Join(logDir, "UpdateLog.txt")
@@ -823,6 +853,7 @@ Usage:
   WinPiBooster.exe remove            Désinstalle le service
   WinPiBooster.exe status            Affiche l'état du service
   WinPiBooster.exe clean-logs        Supprime les archives de logs expirées
+  WinPiBooster.exe list-logs         Liste tous les fichiers de log avec taille et date
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe version           Affiche la version
@@ -908,6 +939,8 @@ func main() {
 		printExtendedStatus()
 	case "clean-logs":
 		cleanOldLogsVerbose(true)
+	case "list-logs":
+		listLogs()
 	case "logs":
 		openLogs()
 	case "report":
