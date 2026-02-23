@@ -716,6 +716,63 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 	printHelp()
 }
 
+// ─── recordInstalled / last_installed history ─────────────────────────────────
+
+func TestRecordInstalled_CapAt10(t *testing.T) {
+	lastInstalledMu.Lock()
+	lastInstalled = nil
+	lastInstalledMu.Unlock()
+	defer func() {
+		lastInstalledMu.Lock()
+		lastInstalled = nil
+		lastInstalledMu.Unlock()
+	}()
+
+	for i := 0; i < 12; i++ {
+		recordInstalled([]installEntry{{KB: "KB100", Title: "T", InstalledAt: "2026-01-01T00:00:00Z"}})
+	}
+
+	lastInstalledMu.Lock()
+	n := len(lastInstalled)
+	lastInstalledMu.Unlock()
+
+	if n != 10 {
+		t.Errorf("lastInstalled len = %d, want 10", n)
+	}
+}
+
+func TestWriteStatusJSON_IncludesLastInstalled(t *testing.T) {
+	oldDir := logDir
+	logDir = t.TempDir()
+	defer func() { logDir = oldDir }()
+
+	lastInstalledMu.Lock()
+	lastInstalled = []installEntry{{KB: "KB5034441", Title: "Security Update", InstalledAt: "2026-01-01T00:00:00Z"}}
+	lastInstalledMu.Unlock()
+	defer func() {
+		lastInstalledMu.Lock()
+		lastInstalled = nil
+		lastInstalledMu.Unlock()
+	}()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(logDir, "status.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(s.LastInstalled) != 1 {
+		t.Fatalf("LastInstalled len = %d, want 1", len(s.LastInstalled))
+	}
+	if s.LastInstalled[0].KB != "KB5034441" {
+		t.Errorf("KB = %q, want KB5034441", s.LastInstalled[0].KB)
+	}
+}
+
 // ─── log_level config ─────────────────────────────────────────────────────────
 
 func TestDefaults_LogLevel(t *testing.T) {

@@ -46,6 +46,10 @@ var (
 	// Prevent concurrent update cycles
 	cycleMu sync.Mutex
 
+	// History of the last 10 installed updates (for status.json).
+	lastInstalled   []installEntry
+	lastInstalledMu sync.Mutex
+
 	// Cached flag: PSWindowsUpdate module ready
 	psModuleReady bool
 	psModuleMu    sync.Mutex
@@ -53,6 +57,23 @@ var (
 	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
 	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 )
+
+// installEntry records a single installed update for the status.json history.
+type installEntry struct {
+	KB          string `json:"kb"`
+	Title       string `json:"title"`
+	InstalledAt string `json:"installed_at"`
+}
+
+// recordInstalled appends entries to lastInstalled, capped at 10 (FIFO).
+func recordInstalled(entries []installEntry) {
+	lastInstalledMu.Lock()
+	defer lastInstalledMu.Unlock()
+	lastInstalled = append(lastInstalled, entries...)
+	if len(lastInstalled) > 10 {
+		lastInstalled = lastInstalled[len(lastInstalled)-10:]
+	}
+}
 
 // Update mirrors the JSON fields returned by Get-WindowsUpdate.
 type Update struct {
@@ -281,6 +302,13 @@ func installUpdates(updates []Update) error {
 	log.Infof("Installation terminée : %s", strings.Join(kbs, ", "))
 	showNotification("Succès", "Mises à jour Windows installées : "+strings.Join(titles, ", "))
 	atomic.AddInt64(&updatesInstalled, int64(len(updates)))
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entries := make([]installEntry, 0, len(updates))
+	for _, u := range updates {
+		entries = append(entries, installEntry{KB: "KB" + u.KB(), Title: u.Title, InstalledAt: now})
+	}
+	recordInstalled(entries)
 	return nil
 }
 
@@ -367,16 +395,22 @@ func cleanOldLogsVerbose(verbose bool) {
 // ─── status.json ──────────────────────────────────────────────────────────────
 
 type statusJSON struct {
-	Version          string `json:"version"`
-	LastCheck        string `json:"last_check"`
-	UpdatesChecked   int64  `json:"updates_checked"`
-	UpdatesInstalled int64  `json:"updates_installed"`
-	UpdatesSkipped   int64  `json:"updates_skipped"`
-	CycleErrors      int64  `json:"cycle_errors"`
+	Version          string         `json:"version"`
+	LastCheck        string         `json:"last_check"`
+	UpdatesChecked   int64          `json:"updates_checked"`
+	UpdatesInstalled int64          `json:"updates_installed"`
+	UpdatesSkipped   int64          `json:"updates_skipped"`
+	CycleErrors      int64          `json:"cycle_errors"`
+	LastInstalled    []installEntry `json:"last_installed"`
 }
 
 // writeStatusJSON writes current counters to status.json atomically.
 func writeStatusJSON() {
+	lastInstalledMu.Lock()
+	history := make([]installEntry, len(lastInstalled))
+	copy(history, lastInstalled)
+	lastInstalledMu.Unlock()
+
 	s := statusJSON{
 		Version:          version,
 		LastCheck:        time.Now().UTC().Format(time.RFC3339),
@@ -384,6 +418,7 @@ func writeStatusJSON() {
 		UpdatesInstalled: atomic.LoadInt64(&updatesInstalled),
 		UpdatesSkipped:   atomic.LoadInt64(&updatesSkipped),
 		CycleErrors:      atomic.LoadInt64(&cycleErrors),
+		LastInstalled:    history,
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
