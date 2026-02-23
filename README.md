@@ -9,12 +9,14 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 - Vérifie toutes les **60 secondes** si des mises à jour Windows sont disponibles
 - Installe automatiquement les mises à jour détectées avec redémarrage automatique si nécessaire
 - Envoie des **notifications Windows toast** à chaque événement clé (démarrage, arrêt, installation, erreur, rapport)
-- Génère un **rapport quotidien à minuit** avec remise à zéro des compteurs
-- Archive les logs à chaque lancement, lors d'un dépassement de taille (**10 MB** par défaut) et supprime les archives de plus de **30 jours**
+- Génère un **rapport quotidien à minuit** avec archivage du log et remise à zéro des compteurs
+- Archive les logs à chaque lancement, à minuit et lors d'un dépassement de taille (**10 MB** par défaut)
+- Supprime les archives de plus de **30 jours** automatiquement
 - Envoie un **heartbeat toutes les heures** avec uptime et compteurs
 - **Circuit breaker** : pause automatique en cas d'erreurs répétées (seuil configurable)
 - **Instance unique** : empêche le lancement de plusieurs instances interactives simultanées
 - Écrit un fichier **status.json** après chaque cycle réussi
+- Vérifie l'**espace disque libre** avant d'installer (seuil configurable)
 
 ## Prérequis
 
@@ -65,20 +67,26 @@ WinPiBooster.exe
 | `WinPiBooster.exe stop` | Arrête le service |
 | `WinPiBooster.exe remove` | Désinstalle le service |
 | `WinPiBooster.exe status` | Affiche l'état du service, la configuration et le dernier cycle |
+| `WinPiBooster.exe diagnose` | Vérifie les prérequis et affiche un rapport de santé |
 | `WinPiBooster.exe clean-logs` | Supprime les archives de logs expirées |
 | `WinPiBooster.exe list-logs` | Liste tous les fichiers de log avec taille et date |
 | `WinPiBooster.exe logs` | Ouvre `UpdateLog.txt` dans le Bloc-notes |
 | `WinPiBooster.exe report` | Affiche les compteurs courants (sans reset) |
+| `WinPiBooster.exe reset-counters` | Remet les compteurs à zéro et réécrit status.json |
+| `WinPiBooster.exe show-config` | Affiche la configuration active |
+| `WinPiBooster.exe test-notify` | Envoie une notification toast de test |
 | `WinPiBooster.exe version` | Affiche la version |
+| `WinPiBooster.exe --version` | Alias Unix pour `version` |
 | `WinPiBooster.exe help` | Affiche l'aide complète |
 
-### Codes de sortie (`--dry-run`)
+### Codes de sortie
 
-| Code | Signification |
-|---|---|
-| `0` | Aucune mise à jour disponible |
-| `1` | Erreur |
-| `2` | Des mises à jour sont disponibles |
+| Code | Commande | Signification |
+|---|---|---|
+| `0` | toutes | Succès |
+| `1` | toutes | Erreur |
+| `2` | `--dry-run` | Des mises à jour sont disponibles |
+| `1` | `diagnose` | Au moins un prérequis manquant |
 
 ## Auto-démarrage avec Windows (service natif)
 
@@ -111,42 +119,53 @@ Créer `config.json` dans le même répertoire que `WinPiBooster.exe`. Toutes le
   "ps_timeout_minutes": 10,
   "cmd_timeout_seconds": 300,
   "circuit_breaker_threshold": 5,
-  "circuit_breaker_pause_minutes": 30
+  "circuit_breaker_pause_minutes": 30,
+  "log_level": "info",
+  "notifications_enabled": true,
+  "min_free_disk_mb": 500
 }
 ```
 
 | Clé | Défaut | Description |
 |---|---|---|
-| `check_interval_seconds` | 60 | Intervalle entre deux vérifications de mises à jour |
-| `retry_attempts` | 3 | Nombre de tentatives sur chaque opération critique |
-| `log_retention_days` | 30 | Durée de conservation des archives de logs (jours) |
-| `max_log_size_mb` | 10 | Taille maximale de UpdateLog.txt avant rotation (MB) |
-| `ps_timeout_minutes` | 10 | Timeout des commandes PowerShell (minutes) |
-| `cmd_timeout_seconds` | 300 | Timeout des commandes système (secondes) |
-| `circuit_breaker_threshold` | 5 | Nombre d'erreurs consécutives avant déclenchement du circuit breaker |
-| `circuit_breaker_pause_minutes` | 30 | Durée de la pause du circuit breaker (minutes) |
+| `check_interval_seconds` | `60` | Intervalle entre deux vérifications de mises à jour |
+| `retry_attempts` | `3` | Nombre de tentatives sur chaque opération critique |
+| `log_retention_days` | `30` | Durée de conservation des archives de logs (jours) |
+| `max_log_size_mb` | `10` | Taille maximale de UpdateLog.txt avant rotation (MB) |
+| `ps_timeout_minutes` | `10` | Timeout des commandes PowerShell (minutes) |
+| `cmd_timeout_seconds` | `300` | Timeout des commandes système (secondes) |
+| `circuit_breaker_threshold` | `5` | Nombre d'erreurs consécutives avant déclenchement du circuit breaker |
+| `circuit_breaker_pause_minutes` | `30` | Durée de la pause du circuit breaker (minutes) |
+| `log_level` | `"info"` | Niveau de log : `debug`, `info`, `warn`, `error` (remplace `DEBUG=true`) |
+| `notifications_enabled` | `true` | Activer/désactiver les notifications toast Windows |
+| `min_free_disk_mb` | `500` | Espace disque minimum requis sur C: avant installation (MB) |
 
 ## Logs
 
 Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog_<timestamp>.txt` :
 - à chaque lancement
+- automatiquement à **minuit** (avant le rapport quotidien)
 - automatiquement quand `UpdateLog.txt` dépasse la taille limite (défaut 10 MB)
 
 Les archives de plus de 30 jours sont supprimées automatiquement.
 
 **Format fichier** (plain text) :
 ```
-2026-02-23 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-23 10:00:00 [INFO]: Script actif — surveillance des mises à jour Windows en cours.
-2026-02-23 10:34:00 [INFO]: Mise à jour disponible : KB5034441
+2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.10.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
 **Console** : même format avec couleurs par niveau (INFO vert, WARN jaune, ERROR rouge).
 
 ### Mode debug
 
-Pour activer les logs verbeux :
+Via config.json (recommandé) :
+```json
+{ "log_level": "debug" }
+```
 
+Ou via variable d'environnement (compatibilité) :
 ```bat
 SET DEBUG=true
 WinPiBooster.exe
@@ -158,12 +177,20 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.7.0",
-  "last_check": "2026-02-23T20:15:00Z",
+  "version": "v2.10.0",
+  "last_check": "2026-02-24T10:15:00Z",
+  "uptime_seconds": 3600,
   "updates_checked": 10,
   "updates_installed": 3,
   "updates_skipped": 6,
-  "cycle_errors": 1
+  "cycle_errors": 1,
+  "last_installed": [
+    {
+      "kb": "KB5034441",
+      "title": "2024-01 Cumulative Update for Windows 11",
+      "installed_at": "2026-02-24T10:15:00Z"
+    }
+  ]
 }
 ```
 
@@ -176,8 +203,8 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 1. `go mod tidy` — vérifie la cohérence du module
 2. `go vet` — analyse statique de base
 3. `staticcheck` — analyse statique avancée
-4. `go test -race` — tests unitaires avec détecteur de races
-5. `go test -coverprofile` — couverture de code (seuil minimum : 15%)
+4. `go test -race -count=1 -timeout 120s` — tests unitaires avec détecteur de races
+5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **20%**)
 6. `go build` — compilation du binaire final
 
 ## Build depuis les sources
@@ -185,5 +212,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.7.0" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.10.0" -o WinPiBooster.exe .
 ```
