@@ -545,6 +545,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Erreur:", err)
 			os.Exit(1)
 		}
+	case "status":
+		if err := statusService(); err != nil {
+			fmt.Fprintln(os.Stderr, "Erreur:", err)
+			os.Exit(1)
+		}
+	case "version":
+		fmt.Printf("WinPiBooster %s\n", version)
 	case "run":
 		// Launched by the SCM — run as a Windows service
 		if err := svc.Run(serviceName, &winService{}); err != nil {

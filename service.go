@@ -144,6 +144,42 @@ func startService() error {
 	return nil
 }
 
+func statusService() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("cannot connect to SCM: %w", err)
+	}
+	defer m.Disconnect()
+
+	s, err := m.OpenService(serviceName)
+	if err != nil {
+		fmt.Printf("Service %q : non installé\n", serviceName)
+		return nil
+	}
+	defer s.Close()
+
+	status, err := s.Query()
+	if err != nil {
+		return fmt.Errorf("cannot query service: %w", err)
+	}
+
+	states := map[svc.State]string{
+		svc.Stopped:         "Stopped",
+		svc.StartPending:    "StartPending",
+		svc.StopPending:     "StopPending",
+		svc.Running:         "Running",
+		svc.ContinuePending: "ContinuePending",
+		svc.PausePending:    "PausePending",
+		svc.Paused:          "Paused",
+	}
+	state, ok := states[status.State]
+	if !ok {
+		state = fmt.Sprintf("Unknown(%d)", status.State)
+	}
+	fmt.Printf("Service %q : %s\n", serviceName, state)
+	return nil
+}
+
 func stopService() error {
 	m, err := mgr.Connect()
 	if err != nil {
