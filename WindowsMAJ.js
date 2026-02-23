@@ -239,6 +239,13 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
+// Heartbeat — once at startup then every hour
+function heartbeat() {
+    logger.info("Script actif — surveillance des mises à jour Windows en cours.");
+}
+heartbeat();
+setInterval(heartbeat, 60 * 60 * 1000);
+
 // Schedule periodic updates
 const checkInterval = 60 * 1000; // Vérification toutes les minutes
 main();
