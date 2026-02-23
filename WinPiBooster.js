@@ -39,6 +39,11 @@ async function execCommand(command) {
     });
 }
 
+// Helper for PowerShell commands with UTF-8 encoding
+async function execPS(psCommand) {
+    return execCommand(`powershell.exe -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; ${psCommand}"`);
+}
+
 // Show Windows notification
 function showNotification(title, message) {
     notifier.notify({
@@ -53,7 +58,7 @@ function showNotification(title, message) {
 async function installNuGetProvider() {
     try {
         logger.debug("Vérification et installation du fournisseur NuGet...");
-        await execCommand('powershell.exe -Command "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Confirm:$false"');
+        await execPS('Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Confirm:$false');
         logger.debug("Fournisseur NuGet installé avec succès.");
     } catch (error) {
         logger.warn(`Le fournisseur NuGet est peut-être déjà installé : ${error}`);
@@ -63,7 +68,7 @@ async function installNuGetProvider() {
 // Check if the PSWindowsUpdate module is installed
 async function isPSWindowsUpdateModuleInstalled() {
     try {
-        const result = await execCommand('powershell.exe -Command "Get-Module -ListAvailable -Name PSWindowsUpdate"');
+        const result = await execPS('Get-Module -ListAvailable -Name PSWindowsUpdate');
         return result.includes('PSWindowsUpdate');
     } catch (error) {
         logger.error(`Erreur lors de la vérification du module PSWindowsUpdate : ${error}`);
@@ -84,7 +89,7 @@ async function installPSWindowsUpdateModule() {
             await installNuGetProvider();
 
             logger.info("Installation du module PSWindowsUpdate...");
-            const result = await execCommand('powershell.exe -Command "Install-Module -Name PSWindowsUpdate -Force -SkipPublisherCheck -Confirm:$false -AllowClobber"');
+            const result = await execPS('Install-Module -Name PSWindowsUpdate -Force -SkipPublisherCheck -Confirm:$false -AllowClobber');
             if (result.toLowerCase().includes('error')) {
                 logger.error("Erreur détectée pendant l'installation : Conflit potentiel avec les politiques de sécurité ou les permissions administratives.");
                 showNotification("Erreur", "Installation du module PSWindowsUpdate échouée.");
@@ -122,7 +127,7 @@ async function ensureWindowsUpdateServiceRunning() {
 async function checkAvailableUpdates() {
     try {
         logger.debug("Vérification des mises à jour disponibles...");
-        const updatesRaw = await execCommand('powershell.exe -Command "Get-WindowsUpdate -MicrosoftUpdate | ConvertTo-Json -Compress"');
+        const updatesRaw = await execPS('Get-WindowsUpdate -MicrosoftUpdate | ConvertTo-Json -Compress');
         if (!updatesRaw) {
             logger.debug("Aucune donnée retournée par PowerShell. Aucune mise à jour disponible ou problème détecté.");
             updatesSkipped++;
@@ -144,7 +149,7 @@ async function checkAvailableUpdates() {
   - Titre : ${update.Title}
   - KB : ${update.KBArticleIDs}
   - Taille : ${update.Size}
-  - Ordinateur : ${update.PSComputerName}`);
+  - Ordinateur : ${update.PSComputerName || 'local'}`);
             });
             updatesChecked += updates.length;
             return updates;
@@ -164,9 +169,8 @@ async function checkAvailableUpdates() {
 async function installUpdates(updates) {
     try {
         logger.info("Installation des mises à jour...");
-        const result = await execCommand('powershell.exe -Command "Install-WindowsUpdate -MicrosoftUpdate -AcceptAll -AutoReboot"');
-        logger.info(`Résultat de l'installation des mises à jour :
-${result}`);
+        const result = await execPS('Install-WindowsUpdate -MicrosoftUpdate -AcceptAll -AutoReboot');
+        logger.info(`Installation terminée : ${updates.map(u => `KB${u.KBArticleIDs}`).join(', ')}`);
         showNotification("Succès", `Mises à jour Windows installées : ${updates.map(u => u.Title).join(", ")}`);
         updatesInstalled += updates.length;
     } catch (error) {
