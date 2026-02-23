@@ -163,6 +163,31 @@ func TestConfigPSTimeout(t *testing.T) {
 	}
 }
 
+func TestConfigCmdTimeout(t *testing.T) {
+	cfg := Config{CmdTimeoutSeconds: 120}
+	if got := cfg.CmdTimeout(); got != 120*time.Second {
+		t.Errorf("CmdTimeout() = %v, want 120s", got)
+	}
+}
+
+func TestLoadConfig_CmdTimeout(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"cmd_timeout_seconds": 60}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := loadConfig()
+	if cfg.CmdTimeoutSeconds != 60 {
+		t.Errorf("CmdTimeoutSeconds = %d, want 60", cfg.CmdTimeoutSeconds)
+	}
+}
+
+func TestDefaults_CmdTimeout(t *testing.T) {
+	if d := defaults(); d.CmdTimeoutSeconds != 300 {
+		t.Errorf("CmdTimeoutSeconds default = %d, want 300", d.CmdTimeoutSeconds)
+	}
+}
+
 func TestLoadConfig_PSTimeout(t *testing.T) {
 	p := cfgPath(t)
 	defer os.Remove(p)

@@ -22,8 +22,7 @@ import (
 // version is set at build time via -ldflags "-X main.version=vX.Y.Z"
 var version = "dev"
 
-// cmdTimeout is the fixed timeout for short system commands (sc, net session).
-const cmdTimeout = 5 * time.Minute
+// psTimeout and cmdTimeout constants removed — use cfg.PSTimeout() / cfg.CmdTimeout().
 
 // ─── Globals ──────────────────────────────────────────────────────────────────
 
@@ -97,7 +96,7 @@ func newCmdCtx(ctx context.Context, name string, args ...string) *exec.Cmd {
 
 // execCommand runs a shell command through cmd /C with a timeout.
 func execCommand(cmd string) (string, error) {
-	ctx, cancel := context.WithTimeout(shutdownCtx, cmdTimeout)
+	ctx, cancel := context.WithTimeout(shutdownCtx, cfg.CmdTimeout())
 	defer cancel()
 	out, err := newCmdCtx(ctx, "cmd", "/C", cmd).Output()
 	if err != nil {
