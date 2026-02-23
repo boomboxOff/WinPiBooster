@@ -5,15 +5,17 @@ Script Node.js de surveillance et d'installation automatique des mises à jour W
 ## Fonctionnement
 
 - Vérifie toutes les **60 secondes** si des mises à jour Windows sont disponibles
-- Installe automatiquement les mises à jour détectées
-- Envoie des **notifications Windows** à chaque étape (installation, erreur, rapport)
-- Archive les logs à chaque lancement et génère un **rapport quotidien à minuit**
+- Installe automatiquement les mises à jour détectées avec redémarrage automatique si nécessaire
+- Envoie des **notifications Windows toast** à chaque événement clé (installation, erreur, rapport)
+- Génère un **rapport quotidien à minuit** avec remise à zéro des compteurs
+- Archive les logs à chaque lancement et supprime les archives de plus de **30 jours**
+- Envoie un **heartbeat toutes les heures** dans les logs pour confirmer que le script est actif
 
 ## Prérequis
 
 - Windows 10/11
 - [Node.js](https://nodejs.org/) installé dans `C:\Program Files\nodejs\`
-- PowerShell avec droits administrateur (requis pour Windows Update)
+- PowerShell (le module **PSWindowsUpdate** est installé automatiquement si absent)
 
 ## Installation
 
@@ -25,13 +27,44 @@ npm install
 
 ## Lancement
 
-Double-cliquer sur `WindowsMAJ.bat` ou lancer depuis un terminal **en administrateur** :
+Double-cliquer sur `WindowsMAJ.bat` — l'élévation des droits administrateur est demandée automatiquement.
+
+Ou depuis un terminal en administrateur :
 
 ```bash
 node WindowsMAJ.js
 ```
 
-> Le script doit tourner avec des droits administrateur pour pouvoir interagir avec Windows Update.
+## Auto-démarrage avec Windows
+
+Pour que le script se lance automatiquement à chaque démarrage Windows :
+
+1. Double-cliquer sur `setup.bat`
+2. Accepter l'élévation UAC
+
+Le Planificateur de tâches Windows lancera le script au démarrage avec les droits SYSTEM.
+
+## Logs
+
+Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog_<timestamp>.txt` à chaque lancement. Les archives de plus de 30 jours sont supprimées automatiquement.
+
+**Format fichier** (plain text) :
+```
+2026-02-23 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
+2026-02-23 10:00:00 [INFO]: Script actif — surveillance des mises à jour Windows en cours.
+2026-02-23 10:34:00 [INFO]: Mise à jour disponible : KB5034441
+```
+
+**Console** : même format avec couleurs par niveau (INFO vert, WARN jaune, ERROR rouge).
+
+### Mode debug
+
+Pour activer les logs verbeux sans modifier le code :
+
+```bat
+SET DEBUG=true
+node WindowsMAJ.js
+```
 
 ## Dépendances
 
@@ -39,9 +72,3 @@ node WindowsMAJ.js
 |---|---|
 | `winston` | Logging fichier + console |
 | `node-notifier` | Notifications Windows toast |
-
-Le module PowerShell **PSWindowsUpdate** est installé automatiquement par le script s'il est absent.
-
-## Logs
-
-Les logs sont générés dans le dossier du script sous la forme `UpdateLog_<timestamp>.txt`. Chaque lancement archive le log précédent.
