@@ -199,7 +199,7 @@ function cleanOldLogs() {
             const { mtimeMs } = fs.statSync(filePath);
             if (mtimeMs < cutoff) {
                 fs.unlinkSync(filePath);
-                logger.info(`Ancien journal supprimé : ${f}`);
+                logger.debug(`Ancien journal supprimé : ${f}`);
             }
         });
 }
@@ -290,17 +290,15 @@ checkAdminRights().then(() => {
     heartbeat();
     setInterval(heartbeat, 60 * 60 * 1000);
     main();
+    setInterval(() => {
+        logger.debug("Début d'un nouveau cycle de vérification des mises à jour.");
+        main();
+    }, checkInterval);
+    setInterval(() => {
+        const now = new Date();
+        if (now.getHours() === 0 && now.getMinutes() === 0) {
+            generateDailyReport();
+            cleanOldLogs();
+        }
+    }, 60 * 1000);
 });
-setInterval(() => {
-    logger.debug("Début d'un nouveau cycle de vérification des mises à jour.");
-    main();
-}, checkInterval);
-
-// Generate daily report and clean old logs at midnight
-setInterval(() => {
-    const now = new Date();
-    if (now.getHours() === 0 && now.getMinutes() === 0) {
-        generateDailyReport();
-        cleanOldLogs();
-    }
-}, 60 * 1000);
