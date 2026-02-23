@@ -505,6 +505,55 @@ func scheduleDailyReport() {
 	}()
 }
 
+// ─── Diagnose ─────────────────────────────────────────────────────────────────
+
+// freeDiskMB returns the free disk space available on C: in MB.
+func freeDiskMB() int64 {
+	path, _ := windows.UTF16PtrFromString(`C:\`)
+	var free, total, totalFree uint64
+	if err := windows.GetDiskFreeSpaceEx(path, &free, &total, &totalFree); err != nil {
+		return 0
+	}
+	return int64(free) / (1024 * 1024)
+}
+
+// runDiagnose checks prerequisites and prints a health report.
+// Returns true if all checks pass.
+func runDiagnose() bool {
+	allOK := true
+	check := func(label string, ok bool, detail string) {
+		status := "OK   "
+		if !ok {
+			status = "ERREUR"
+			allOK = false
+		}
+		if detail != "" {
+			fmt.Printf("  [%s] %s — %s\n", status, label, detail)
+		} else {
+			fmt.Printf("  [%s] %s\n", status, label)
+		}
+	}
+
+	fmt.Printf("Diagnostic WinPiBooster %s :\n\n", version)
+
+	check("Droits administrateur", checkAdminRights() == nil, "")
+	check("Module PSWindowsUpdate", isPSWindowsUpdateModuleInstalled(), "")
+
+	out, err := execCommand("sc query wuauserv")
+	check("Service Windows Update (wuauserv)", err == nil && strings.Contains(out, "RUNNING"), "")
+
+	free := freeDiskMB()
+	check("Espace disque libre (C:)", free >= 500, fmt.Sprintf("%d MB disponibles", free))
+
+	fmt.Println()
+	if allOK {
+		fmt.Println("Tous les prérequis sont satisfaits.")
+	} else {
+		fmt.Println("Un ou plusieurs prérequis manquants — consultez les détails ci-dessus.")
+	}
+	return allOK
+}
+
 // ─── Admin rights ─────────────────────────────────────────────────────────────
 
 func checkAdminRights() error {
@@ -956,6 +1005,7 @@ Usage:
   WinPiBooster.exe test-notify       Envoie une notification toast de test
   WinPiBooster.exe reset-counters    Remet les compteurs à zéro et réécrit status.json
   WinPiBooster.exe show-config       Affiche la configuration active
+  WinPiBooster.exe diagnose          Vérifie les prérequis et affiche un rapport de santé
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe --version         Alias Unix pour version
   WinPiBooster.exe help              Affiche cette aide
@@ -1056,6 +1106,10 @@ func main() {
 		resetCounters()
 	case "show-config":
 		printShowConfig()
+	case "diagnose":
+		if !runDiagnose() {
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Printf("WinPiBooster %s\n", version)
 	case "help":

@@ -849,6 +849,15 @@ func TestValidateConfig_LogLevel_Valid(t *testing.T) {
 	}
 }
 
+// ─── diagnose ─────────────────────────────────────────────────────────────────
+
+func TestFreeDiskMB_Positive(t *testing.T) {
+	free := freeDiskMB()
+	if free <= 0 {
+		t.Errorf("freeDiskMB() = %d, want > 0", free)
+	}
+}
+
 // ─── printShowConfig() ────────────────────────────────────────────────────────
 
 func TestPrintShowConfig_NoPanic(t *testing.T) {
