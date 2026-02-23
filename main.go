@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -899,6 +900,33 @@ func listLogs() {
 	}
 }
 
+// tailLogs prints the last N lines of UpdateLog.txt (default 20).
+// Supports --lines N anywhere in os.Args.
+func tailLogs() {
+	n := 20
+	args := os.Args[1:]
+	for i, arg := range args {
+		if arg == "--lines" && i+1 < len(args) {
+			if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+				n = v
+			}
+		}
+	}
+
+	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		fmt.Printf("Aucun fichier de log trouvé : %s\n", logPath)
+		return
+	}
+
+	lines := strings.Split(strings.TrimRight(string(data), "\r\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	fmt.Println(strings.Join(lines, "\n"))
+}
+
 // openLogs opens UpdateLog.txt in Notepad.
 func openLogs() {
 	logPath := filepath.Join(logDir, "UpdateLog.txt")
@@ -1013,6 +1041,7 @@ Usage:
   WinPiBooster.exe status            Affiche l'état du service
   WinPiBooster.exe clean-logs        Supprime les archives de logs expirées
   WinPiBooster.exe list-logs         Liste tous les fichiers de log avec taille et date
+  WinPiBooster.exe tail              Affiche les 20 dernières lignes du log (--lines N pour changer)
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe test-notify       Envoie une notification toast de test
@@ -1109,6 +1138,8 @@ func main() {
 		cleanOldLogsVerbose(true)
 	case "list-logs":
 		listLogs()
+	case "tail":
+		tailLogs()
 	case "logs":
 		openLogs()
 	case "report":

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1008,6 +1009,62 @@ func TestTestNotify_NoPanic(t *testing.T) {
 	out := string(buf[:n])
 	if !strings.Contains(out, "Notification de test envoyée") {
 		t.Errorf("expected confirmation message, got: %s", out)
+	}
+}
+
+// ─── tailLogs() ───────────────────────────────────────────────────────────────
+
+func TestTailLogs_LastLines(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Write 30 lines numbered 1..30
+	var sb strings.Builder
+	for i := 1; i <= 30; i++ {
+		sb.WriteString(fmt.Sprintf("line %d\n", i))
+	}
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(sb.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	old2 := os.Stdout
+	os.Stdout = w
+	tailLogs() // default 20 lines
+	w.Close()
+	os.Stdout = old2
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "line 30") {
+		t.Errorf("expected last line in output, got: %s", out)
+	}
+	if strings.Contains(out, "line 1\n") {
+		t.Errorf("expected first lines to be trimmed, got: %s", out)
+	}
+}
+
+func TestTailLogs_AbsentFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	r, w, _ := os.Pipe()
+	old2 := os.Stdout
+	os.Stdout = w
+	tailLogs()
+	w.Close()
+	os.Stdout = old2
+
+	buf := make([]byte, 256)
+	n, _ := r.Read(buf)
+	if !strings.Contains(string(buf[:n]), "Aucun fichier de log") {
+		t.Errorf("expected absent message, got: %s", string(buf[:n]))
 	}
 }
 
