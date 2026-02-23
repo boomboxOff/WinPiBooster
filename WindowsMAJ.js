@@ -5,16 +5,14 @@ const path = require('path');
 const fs = require('fs');
 
 // Logger setup
+let fileTransport = new transports.File({ filename: path.join(__dirname, 'UpdateLog.txt') });
 const logger = createLogger({
     level: 'info',
     format: format.combine(
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
     ),
-    transports: [
-        new transports.File({ filename: path.join(__dirname, 'UpdateLog.txt') }),
-        new transports.Console()
-    ],
+    transports: [fileTransport, new transports.Console()],
 });
 
 let updatesChecked = 0;
@@ -162,15 +160,21 @@ ${result}`);
     }
 }
 
-// Archive old logs and delete archives older than 30 days
+// Archive current log by closing the Winston transport, renaming the file, then reopening
 function archiveOldLogs() {
     const logFile = path.join(__dirname, 'UpdateLog.txt');
-    const archiveFile = path.join(__dirname, `UpdateLog_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
-    if (fs.existsSync(logFile)) {
-        fs.renameSync(logFile, archiveFile);
-        logger.info("Journal archivé.");
-    }
+    if (!fs.existsSync(logFile)) return;
 
+    const archiveFile = path.join(__dirname, `UpdateLog_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`);
+    logger.remove(fileTransport);
+    fs.renameSync(logFile, archiveFile);
+    fileTransport = new transports.File({ filename: logFile });
+    logger.add(fileTransport);
+    logger.info("Journal archivé.");
+}
+
+// Delete log archives older than 30 days (called once a day)
+function cleanOldLogs() {
     const maxAgeDays = 30;
     const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
     fs.readdirSync(__dirname)
@@ -225,6 +229,16 @@ async function main() {
     }
 }
 
+// Graceful shutdown
+process.on('SIGINT', () => {
+    logger.info("Arrêt du script demandé (SIGINT).");
+    process.exit(0);
+});
+process.on('SIGTERM', () => {
+    logger.info("Arrêt du script demandé (SIGTERM).");
+    process.exit(0);
+});
+
 // Schedule periodic updates
 const checkInterval = 60 * 1000; // Vérification toutes les minutes
 main();
@@ -233,10 +247,11 @@ setInterval(() => {
     main();
 }, checkInterval);
 
-// Generate daily report at midnight
+// Generate daily report and clean old logs at midnight
 setInterval(() => {
     const now = new Date();
     if (now.getHours() === 0 && now.getMinutes() === 0) {
         generateDailyReport();
+        cleanOldLogs();
     }
 }, 60 * 1000);
