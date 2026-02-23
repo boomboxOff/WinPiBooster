@@ -410,6 +410,49 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── writeStatusJSON() ────────────────────────────────────────────────────────
+
+func TestWriteStatusJSON(t *testing.T) {
+	oldDir := logDir
+	logDir = t.TempDir()
+	defer func() { logDir = oldDir }()
+
+	atomic.StoreInt64(&updatesChecked, 10)
+	atomic.StoreInt64(&updatesInstalled, 3)
+	atomic.StoreInt64(&updatesSkipped, 6)
+	atomic.StoreInt64(&cycleErrors, 1)
+	defer func() {
+		atomic.StoreInt64(&updatesChecked, 0)
+		atomic.StoreInt64(&updatesInstalled, 0)
+		atomic.StoreInt64(&updatesSkipped, 0)
+		atomic.StoreInt64(&cycleErrors, 0)
+	}()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(logDir, "status.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if s.UpdatesChecked != 10 {
+		t.Errorf("UpdatesChecked = %d, want 10", s.UpdatesChecked)
+	}
+	if s.UpdatesInstalled != 3 {
+		t.Errorf("UpdatesInstalled = %d, want 3", s.UpdatesInstalled)
+	}
+	if s.CycleErrors != 1 {
+		t.Errorf("CycleErrors = %d, want 1", s.CycleErrors)
+	}
+	if s.LastCheck == "" {
+		t.Error("LastCheck should not be empty")
+	}
+}
+
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 
 func TestDefaults_CircuitBreaker(t *testing.T) {

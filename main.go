@@ -338,6 +338,44 @@ func cleanOldLogs() {
 	}
 }
 
+// ─── status.json ──────────────────────────────────────────────────────────────
+
+type statusJSON struct {
+	Version          string `json:"version"`
+	LastCheck        string `json:"last_check"`
+	UpdatesChecked   int64  `json:"updates_checked"`
+	UpdatesInstalled int64  `json:"updates_installed"`
+	UpdatesSkipped   int64  `json:"updates_skipped"`
+	CycleErrors      int64  `json:"cycle_errors"`
+}
+
+// writeStatusJSON writes current counters to status.json atomically.
+func writeStatusJSON() {
+	s := statusJSON{
+		Version:          version,
+		LastCheck:        time.Now().UTC().Format(time.RFC3339),
+		UpdatesChecked:   atomic.LoadInt64(&updatesChecked),
+		UpdatesInstalled: atomic.LoadInt64(&updatesInstalled),
+		UpdatesSkipped:   atomic.LoadInt64(&updatesSkipped),
+		CycleErrors:      atomic.LoadInt64(&cycleErrors),
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Debugf("writeStatusJSON: marshal error: %v", err)
+		return
+	}
+	dest := filepath.Join(logDir, "status.json")
+	tmp := dest + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		log.Debugf("writeStatusJSON: write error: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		log.Debugf("writeStatusJSON: rename error: %v", err)
+		_ = os.Remove(tmp)
+	}
+}
+
 // ─── Reporting ────────────────────────────────────────────────────────────────
 
 // buildDailyReport formats the daily report string from the given counters.
@@ -523,6 +561,7 @@ func runCycle() {
 
 	// Successful cycle — reset consecutive error counter.
 	atomic.StoreInt64(&consecutiveErrors, 0)
+	writeStatusJSON()
 	log.Debug("Processus terminé.")
 }
 
