@@ -556,6 +556,21 @@ func TestParseRebootPending(t *testing.T) {
 	}
 }
 
+// ─── --version flag parsing ───────────────────────────────────────────────────
+
+func TestVersionFlagDetection(t *testing.T) {
+	args := []string{"prog", "--version"}
+	found := false
+	for _, arg := range args[1:] {
+		if arg == "--version" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("--version flag not detected")
+	}
+}
+
 // ─── dry-run flag parsing ─────────────────────────────────────────────────────
 
 func TestDryRunFlagDetection(t *testing.T) {

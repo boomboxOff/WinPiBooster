@@ -955,6 +955,7 @@ Usage:
   WinPiBooster.exe reset-counters    Remet les compteurs à zéro et réécrit status.json
   WinPiBooster.exe show-config       Affiche la configuration active
   WinPiBooster.exe version           Affiche la version
+  WinPiBooster.exe --version         Alias Unix pour version
   WinPiBooster.exe help              Affiche cette aide
 
 Codes de sortie:
@@ -995,13 +996,17 @@ func main() {
 		defer logHook.Close()
 	}
 
-	// Detect --dry-run flag (may appear at any position)
+	// Detect --dry-run and --version flags (may appear at any position)
 	dryRun := false
 	filteredArgs := os.Args[:1]
 	for _, arg := range os.Args[1:] {
-		if arg == "--dry-run" {
+		switch arg {
+		case "--dry-run":
 			dryRun = true
-		} else {
+		case "--version":
+			fmt.Printf("WinPiBooster %s\n", version)
+			os.Exit(0)
+		default:
 			filteredArgs = append(filteredArgs, arg)
 		}
 	}
