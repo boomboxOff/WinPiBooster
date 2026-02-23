@@ -32,7 +32,9 @@ WinPiBooster\
   WinPiBooster.bat
   setup.bat
   README.md
-  v2\
+  go.mod
+  main.go
+  logger.go
 ```
 
 ## Lancement
@@ -87,6 +89,5 @@ WinPiBooster.exe
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-cd v2
-go build -ldflags="-s -w" -o ../WinPiBooster.exe .
+go build -ldflags="-s -w" -o WinPiBooster.exe .
 ```
