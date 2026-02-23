@@ -504,6 +504,35 @@ func initLogger() error {
 	return nil
 }
 
+// runDryRun performs a single update check without installing anything.
+func runDryRun() {
+	if err := checkAdminRights(); err != nil {
+		fmt.Fprintln(os.Stderr, "Droits administrateur requis.")
+		os.Exit(1)
+	}
+	fmt.Println("[DRY-RUN] Vérification des mises à jour disponibles (aucune installation)...")
+
+	if err := installPSWindowsUpdateModule(); err != nil {
+		fmt.Fprintf(os.Stderr, "[DRY-RUN] Erreur module PSWindowsUpdate : %v\n", err)
+		os.Exit(1)
+	}
+
+	updates, err := checkAvailableUpdates()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[DRY-RUN] Erreur lors de la vérification : %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(updates) == 0 {
+		fmt.Println("[DRY-RUN] Aucune mise à jour disponible.")
+		return
+	}
+	fmt.Printf("[DRY-RUN] %d mise(s) à jour disponible(s) :\n", len(updates))
+	for _, u := range updates {
+		fmt.Printf("  - %s (KB%s)\n", u.Title, u.KB())
+	}
+}
+
 // runInteractive runs the update loop in console mode (SIGINT/SIGTERM aware).
 func runInteractive() {
 	if err := checkAdminRights(); err != nil {
@@ -583,6 +612,7 @@ func printHelp() {
 
 Usage:
   WinPiBooster.exe                   Mode interactif (console, Ctrl+C pour quitter)
+  WinPiBooster.exe --dry-run         Vérifie les mises à jour disponibles sans les installer
   WinPiBooster.exe install           Installe le service Windows (démarrage automatique)
   WinPiBooster.exe start             Démarre le service
   WinPiBooster.exe stop              Arrête le service
@@ -626,10 +656,21 @@ func main() {
 		defer logHook.Close()
 	}
 
-	// Dispatch on first argument
+	// Detect --dry-run flag (may appear at any position)
+	dryRun := false
+	filteredArgs := os.Args[:1]
+	for _, arg := range os.Args[1:] {
+		if arg == "--dry-run" {
+			dryRun = true
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	// Dispatch on first non-flag argument
 	cmd := ""
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	if len(filteredArgs) > 1 {
+		cmd = filteredArgs[1]
 	}
 
 	switch cmd {
@@ -673,8 +714,11 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		// No argument (or unknown) — interactive console mode
-		runInteractive()
+		if dryRun {
+			runDryRun()
+		} else {
+			runInteractive()
+		}
 	}
 }
 

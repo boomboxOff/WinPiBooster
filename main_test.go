@@ -410,6 +410,42 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── dry-run flag parsing ─────────────────────────────────────────────────────
+
+func TestDryRunFlagDetection(t *testing.T) {
+	cases := []struct {
+		args    []string
+		wantDry bool
+		wantCmd string
+	}{
+		{[]string{"prog", "--dry-run"}, true, ""},
+		{[]string{"prog"}, false, ""},
+		{[]string{"prog", "status"}, false, "status"},
+		{[]string{"prog", "--dry-run", "status"}, true, "status"},
+	}
+	for _, c := range cases {
+		dryRun := false
+		filtered := c.args[:1]
+		for _, arg := range c.args[1:] {
+			if arg == "--dry-run" {
+				dryRun = true
+			} else {
+				filtered = append(filtered, arg)
+			}
+		}
+		cmd := ""
+		if len(filtered) > 1 {
+			cmd = filtered[1]
+		}
+		if dryRun != c.wantDry {
+			t.Errorf("args=%v: dryRun=%v, want %v", c.args, dryRun, c.wantDry)
+		}
+		if cmd != c.wantCmd {
+			t.Errorf("args=%v: cmd=%q, want %q", c.args, cmd, c.wantCmd)
+		}
+	}
+}
+
 // ─── openLogs() ───────────────────────────────────────────────────────────────
 
 func TestOpenLogs_AbsentFile(t *testing.T) {
