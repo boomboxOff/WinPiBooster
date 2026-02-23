@@ -16,9 +16,10 @@ const consoleFormat = format.combine(
 );
 
 // Logger setup
+const logLevel = process.env.DEBUG === 'true' ? 'debug' : 'info';
 let fileTransport = new transports.File({ filename: path.join(__dirname, 'UpdateLog.txt'), format: fileFormat });
 const logger = createLogger({
-    level: 'info',
+    level: logLevel,
     transports: [fileTransport, new transports.Console({ format: consoleFormat })],
 });
 
