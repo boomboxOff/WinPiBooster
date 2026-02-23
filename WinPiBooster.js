@@ -225,7 +225,6 @@ async function main() {
     }
     isRunning = true;
     logger.debug("Lancement du processus de mise à jour Windows...");
-    archiveOldLogs();
 
     try {
         await installPSWindowsUpdateModule();
@@ -287,6 +286,7 @@ function heartbeat() {
 const checkInterval = 60 * 1000; // Vérification toutes les minutes
 
 checkAdminRights().then(() => {
+    archiveOldLogs();
     heartbeat();
     setInterval(heartbeat, 60 * 60 * 1000);
     main();
