@@ -40,6 +40,9 @@ var (
 	cycleErrors         int64
 	consecutiveErrors   int64 // reset to 0 on each successful cycle
 
+	// Process start time (set at package init).
+	startTime time.Time
+
 	// Prevent concurrent update cycles
 	cycleMu sync.Mutex
 
@@ -397,9 +400,26 @@ func generateDailyReport() {
 	showNotification("Rapport quotidien", report)
 }
 
+// formatUptime formats a duration as "Xh Ym Zs" (hours optional if zero).
+func formatUptime(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	return fmt.Sprintf("%dm %ds", m, s)
+}
+
 func heartbeat() {
+	uptime := formatUptime(time.Since(startTime))
+	checked := atomic.LoadInt64(&updatesChecked)
+	installed := atomic.LoadInt64(&updatesInstalled)
+	errors := atomic.LoadInt64(&cycleErrors)
 	log.Info(strings.Repeat("─", 62))
-	log.Infof("WinPiBooster %s — surveillance des mises à jour Windows en cours.", version)
+	log.Infof("WinPiBooster %s — actif depuis %s | vérifications: %d | installées: %d | erreurs: %d",
+		version, uptime, checked, installed, errors)
 }
 
 // durationUntilMidnight returns the duration until the next midnight.
@@ -569,6 +589,7 @@ func runCycle() {
 
 // initLogger initialises the logger and sets logDir from the executable path.
 func initLogger() error {
+	startTime = time.Now()
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("cannot determine executable path: %w", err)

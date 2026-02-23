@@ -410,6 +410,26 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── formatUptime() ───────────────────────────────────────────────────────────
+
+func TestFormatUptime(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{30 * time.Second, "0m 30s"},
+		{90 * time.Second, "1m 30s"},
+		{1*time.Hour + 5*time.Minute + 3*time.Second, "1h 5m 3s"},
+		{2*time.Hour + 0*time.Minute + 0*time.Second, "2h 0m 0s"},
+		{0, "0m 0s"},
+	}
+	for _, c := range cases {
+		if got := formatUptime(c.d); got != c.want {
+			t.Errorf("formatUptime(%v) = %q, want %q", c.d, got, c.want)
+		}
+	}
+}
+
 // ─── writeStatusJSON() ────────────────────────────────────────────────────────
 
 func TestWriteStatusJSON(t *testing.T) {
