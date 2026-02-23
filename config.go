@@ -32,6 +32,7 @@ type Config struct {
 	LogLevel                   string `json:"log_level"`
 	NotificationsEnabled       *bool  `json:"notifications_enabled"`
 	MinFreeDiskMB              int    `json:"min_free_disk_mb"`
+	HeartbeatIntervalMinutes   int    `json:"heartbeat_interval_minutes"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -48,6 +49,7 @@ func defaults() Config {
 		LogLevel:                   "info",
 		NotificationsEnabled:       boolPtr(true),
 		MinFreeDiskMB:              500,
+		HeartbeatIntervalMinutes:   60,
 	}
 }
 
@@ -110,6 +112,9 @@ func loadConfig() Config {
 	if partial.MinFreeDiskMB > 0 {
 		cfg.MinFreeDiskMB = partial.MinFreeDiskMB
 	}
+	if partial.HeartbeatIntervalMinutes > 0 {
+		cfg.HeartbeatIntervalMinutes = partial.HeartbeatIntervalMinutes
+	}
 
 	return cfg
 }
@@ -132,6 +137,11 @@ func (c Config) PSTimeout() time.Duration {
 // CmdTimeout returns the system command timeout as a time.Duration.
 func (c Config) CmdTimeout() time.Duration {
 	return time.Duration(c.CmdTimeoutSeconds) * time.Second
+}
+
+// HeartbeatInterval returns the heartbeat interval as a time.Duration.
+func (c Config) HeartbeatInterval() time.Duration {
+	return time.Duration(c.HeartbeatIntervalMinutes) * time.Minute
 }
 
 // validateConfig logs a WARN for each field that is outside its acceptable range.
@@ -169,5 +179,8 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.MinFreeDiskMB < 100 {
 		log.Warnf("config.json : min_free_disk_mb=%d est trop bas (minimum 100) — valeur par défaut utilisée : 500", cfg.MinFreeDiskMB)
+	}
+	if cfg.HeartbeatIntervalMinutes < 5 {
+		log.Warnf("config.json : heartbeat_interval_minutes=%d est trop bas (minimum 5) — valeur par défaut utilisée : 60", cfg.HeartbeatIntervalMinutes)
 	}
 }

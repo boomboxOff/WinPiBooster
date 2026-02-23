@@ -1201,6 +1201,30 @@ func TestAcquireSingleInstanceMutex_SecondFails(t *testing.T) {
 	}
 }
 
+// ─── HeartbeatInterval ────────────────────────────────────────────────────────
+
+func TestHeartbeatInterval_Default(t *testing.T) {
+	c := defaults()
+	if c.HeartbeatInterval() != 60*time.Minute {
+		t.Errorf("expected 60m, got %v", c.HeartbeatInterval())
+	}
+}
+
+func TestHeartbeatInterval_Custom(t *testing.T) {
+	c := defaults()
+	c.HeartbeatIntervalMinutes = 15
+	if c.HeartbeatInterval() != 15*time.Minute {
+		t.Errorf("expected 15m, got %v", c.HeartbeatInterval())
+	}
+}
+
+func TestDefaults_HeartbeatIntervalMinutes(t *testing.T) {
+	c := defaults()
+	if c.HeartbeatIntervalMinutes != 60 {
+		t.Errorf("expected 60, got %d", c.HeartbeatIntervalMinutes)
+	}
+}
+
 // ─── min() ────────────────────────────────────────────────────────────────────
 
 func TestMin(t *testing.T) {

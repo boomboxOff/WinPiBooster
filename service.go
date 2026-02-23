@@ -24,7 +24,7 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	status <- svc.Status{State: svc.StartPending}
 
 	// Start the update loop in background
-	heartbeatTicker := time.NewTicker(time.Hour)
+	heartbeatTicker := time.NewTicker(cfg.HeartbeatInterval())
 	cycleTicker := time.NewTicker(cfg.CheckInterval())
 
 	showNotification("WinPiBooster démarré", "Surveillance des mises à jour Windows active.")

@@ -888,7 +888,7 @@ func runInteractive() {
 	archiveOldLogs()
 	heartbeat()
 
-	heartbeatTicker := time.NewTicker(time.Hour)
+	heartbeatTicker := time.NewTicker(cfg.HeartbeatInterval())
 	go func() {
 		for {
 			select {
