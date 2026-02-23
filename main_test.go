@@ -354,6 +354,32 @@ func TestFileHook_NoRotationBelowLimit(t *testing.T) {
 	}
 }
 
+// ─── openLogs() ───────────────────────────────────────────────────────────────
+
+func TestOpenLogs_AbsentFile(t *testing.T) {
+	// Point logDir at a temp dir with no UpdateLog.txt — should not panic.
+	old := logDir
+	logDir = t.TempDir()
+	defer func() { logDir = old }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	oldOut := os.Stdout
+	os.Stdout = w
+	openLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 512)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+	if !strings.Contains(out, "Aucun fichier de log") {
+		t.Errorf("expected 'Aucun fichier de log' message, got: %s", out)
+	}
+}
+
 // ─── printReport() ────────────────────────────────────────────────────────────
 
 func TestPrintReport_NoPanic(t *testing.T) {

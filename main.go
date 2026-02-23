@@ -556,6 +556,18 @@ func runInteractive() {
 
 // ─── Report / Help ────────────────────────────────────────────────────────────
 
+// openLogs opens UpdateLog.txt in Notepad.
+func openLogs() {
+	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		fmt.Printf("Aucun fichier de log trouvé : %s\n", logPath)
+		return
+	}
+	if err := exec.Command("cmd", "/C", "start", "notepad", logPath).Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Impossible d'ouvrir le fichier de log : %v\n", err)
+	}
+}
+
 // printReport prints the current counters without resetting them.
 func printReport() {
 	checked := atomic.LoadInt64(&updatesChecked)
@@ -576,6 +588,7 @@ Usage:
   WinPiBooster.exe stop              Arrête le service
   WinPiBooster.exe remove            Désinstalle le service
   WinPiBooster.exe status            Affiche l'état du service
+  WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe help              Affiche cette aide
@@ -645,6 +658,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Erreur:", err)
 			os.Exit(1)
 		}
+	case "logs":
+		openLogs()
 	case "report":
 		printReport()
 	case "version":
