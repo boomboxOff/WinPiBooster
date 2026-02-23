@@ -431,7 +431,10 @@ func runCycle() {
 	}
 
 	if len(updates) > 0 {
-		if err := installUpdates(updates); err != nil {
+		err := retryBackoff("installUpdates", 3, defaultBackoff, func() error {
+			return installUpdates(updates)
+		})
+		if err != nil {
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 			showNotification("Erreur", "Erreur globale du processus de mise à jour.")
 		}
