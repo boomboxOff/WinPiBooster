@@ -140,6 +140,12 @@ func showNotification(title, message string) {
 	}
 }
 
+// testNotify sends a test toast notification and prints a confirmation.
+func testNotify() {
+	showNotification("WinPiBooster — Test", "Les notifications fonctionnent correctement.")
+	fmt.Println("Notification de test envoyée.")
+}
+
 // ─── Update logic ─────────────────────────────────────────────────────────────
 
 func installNuGetProvider() {
@@ -856,6 +862,7 @@ Usage:
   WinPiBooster.exe list-logs         Liste tous les fichiers de log avec taille et date
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
+  WinPiBooster.exe test-notify       Envoie une notification toast de test
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe help              Affiche cette aide
 
@@ -945,6 +952,8 @@ func main() {
 		openLogs()
 	case "report":
 		printReport()
+	case "test-notify":
+		testNotify()
 	case "version":
 		fmt.Printf("WinPiBooster %s\n", version)
 	case "help":
