@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -986,6 +987,36 @@ func tailLogs() {
 	fmt.Println(strings.Join(lines, "\n"))
 }
 
+// historyLogs scans all log files (current + archives) and prints every
+// "Installation terminée" line in chronological order.
+func historyLogs() {
+	current := filepath.Join(logDir, "UpdateLog.txt")
+	archives, _ := filepath.Glob(filepath.Join(logDir, "UpdateLog_*.txt"))
+
+	// Build ordered file list: archives first (sorted), then current log
+	sort.Strings(archives)
+	files := append(archives, current)
+
+	total := 0
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(line, "Installation terminée :") {
+				fmt.Println(strings.TrimRight(line, "\r"))
+				total++
+			}
+		}
+	}
+	if total == 0 {
+		fmt.Println("Aucune installation enregistrée dans les logs.")
+	} else {
+		fmt.Printf("\nTotal : %d installation(s) enregistrée(s).\n", total)
+	}
+}
+
 // openLogs opens UpdateLog.txt in Notepad.
 func openLogs() {
 	logPath := filepath.Join(logDir, "UpdateLog.txt")
@@ -1101,6 +1132,7 @@ Usage:
   WinPiBooster.exe clean-logs        Supprime les archives de logs expirées
   WinPiBooster.exe list-logs         Liste tous les fichiers de log avec taille et date
   WinPiBooster.exe tail              Affiche les 20 dernières lignes du log (--lines N pour changer)
+  WinPiBooster.exe history           Liste toutes les mises à jour installées (logs courant + archives)
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe test-notify       Envoie une notification toast de test
@@ -1199,6 +1231,8 @@ func main() {
 		listLogs()
 	case "tail":
 		tailLogs()
+	case "history":
+		historyLogs()
 	case "logs":
 		openLogs()
 	case "report":

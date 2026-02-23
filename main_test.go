@@ -1201,6 +1201,59 @@ func TestAcquireSingleInstanceMutex_SecondFails(t *testing.T) {
 	}
 }
 
+// ─── historyLogs() ────────────────────────────────────────────────────────────
+
+func TestHistoryLogs_NoFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "Aucune installation enregistrée") {
+		t.Errorf("expected no-install message, got: %q", out)
+	}
+}
+
+func TestHistoryLogs_WithEntries(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	content := "2026-02-24 10:00:00 [INFO]: Installation terminée : KB5034441, KB5034442\n" +
+		"2026-02-24 10:01:00 [INFO]: Heartbeat\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "KB5034441") {
+		t.Errorf("expected KB5034441 in output, got: %q", out)
+	}
+	if !strings.Contains(out, "Total : 1 installation(s)") {
+		t.Errorf("expected total=1, got: %q", out)
+	}
+}
+
 // ─── HeartbeatInterval ────────────────────────────────────────────────────────
 
 func TestHeartbeatInterval_Default(t *testing.T) {
