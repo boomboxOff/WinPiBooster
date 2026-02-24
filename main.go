@@ -1200,6 +1200,7 @@ Usage:
   WinPiBooster.exe                   Mode interactif (console, Ctrl+C pour quitter)
   WinPiBooster.exe --dry-run         Vérifie les mises à jour disponibles sans les installer
   WinPiBooster.exe install           Installe le service Windows (démarrage automatique)
+  WinPiBooster.exe install --start   Installe ET démarre le service en une seule commande
   WinPiBooster.exe start             Démarre le service
   WinPiBooster.exe stop              Arrête le service
   WinPiBooster.exe remove            Désinstalle le service
@@ -1284,6 +1285,16 @@ func main() {
 		if err := installService(); err != nil {
 			fmt.Fprintln(os.Stderr, "Erreur:", err)
 			os.Exit(1)
+		}
+		// --start flag: automatically start the service after installation
+		for _, arg := range os.Args[2:] {
+			if arg == "--start" {
+				if err := startService(); err != nil {
+					fmt.Fprintln(os.Stderr, "Erreur au démarrage:", err)
+					os.Exit(1)
+				}
+				break
+			}
 		}
 	case "remove":
 		if err := removeService(); err != nil {

@@ -1378,6 +1378,36 @@ func TestExportConfig_JSONRoundtrip(t *testing.T) {
 	}
 }
 
+// ─── install --start flag detection ───────────────────────────────────────────
+
+func TestInstallStartFlag_Detected(t *testing.T) {
+	args := []string{"WinPiBooster.exe", "install", "--start"}
+	found := false
+	for _, arg := range args[2:] {
+		if arg == "--start" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("--start flag not detected in args")
+	}
+}
+
+func TestInstallStartFlag_Absent(t *testing.T) {
+	args := []string{"WinPiBooster.exe", "install"}
+	found := false
+	for _, arg := range args[2:] {
+		if arg == "--start" {
+			found = true
+			break
+		}
+	}
+	if found {
+		t.Error("--start flag should not be detected when absent")
+	}
+}
+
 // ─── circuit_breaker_reset_minutes ────────────────────────────────────────────
 
 func TestDefaults_CircuitBreakerResetMinutes(t *testing.T) {
