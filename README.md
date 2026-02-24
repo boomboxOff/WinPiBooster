@@ -12,6 +12,7 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 - Génère un **rapport quotidien à minuit** avec archivage du log et remise à zéro des compteurs
 - Génère un **rapport hebdomadaire chaque dimanche à minuit** avec les totaux de la semaine
 - Notification toast unique quand un **redémarrage est en attente** (anti-spam : une seule fois par session)
+- **Auto-reset du circuit breaker** après N minutes sans erreur (configurable, désactivé par défaut)
 - Archive les logs à chaque lancement, à minuit et lors d'un dépassement de taille (**10 MB** par défaut)
 - Supprime les archives de plus de **30 jours** automatiquement
 - Envoie un **heartbeat toutes les heures** avec uptime et compteurs
@@ -78,6 +79,9 @@ WinPiBooster.exe
 | `WinPiBooster.exe report` | Affiche les compteurs courants (sans reset) |
 | `WinPiBooster.exe reset-counters` | Remet les compteurs à zéro et réécrit status.json |
 | `WinPiBooster.exe show-config` | Affiche la configuration active |
+| `WinPiBooster.exe show-config --json` | Affiche la configuration au format JSON |
+| `WinPiBooster.exe export-config` | Écrit `config.json` depuis la configuration active (`--force` pour écraser) |
+| `WinPiBooster.exe install --start` | Installe ET démarre le service en une seule commande |
 | `WinPiBooster.exe test-notify` | Envoie une notification toast de test |
 | `WinPiBooster.exe version` | Affiche la version |
 | `WinPiBooster.exe --version` | Alias Unix pour `version` |
@@ -128,7 +132,8 @@ Créer `config.json` dans le même répertoire que `WinPiBooster.exe`. Toutes le
   "notifications_enabled": true,
   "min_free_disk_mb": 500,
   "heartbeat_interval_minutes": 60,
-  "retry_delay_seconds": 5
+  "retry_delay_seconds": 5,
+  "circuit_breaker_reset_minutes": 0
 }
 ```
 
@@ -147,6 +152,7 @@ Créer `config.json` dans le même répertoire que `WinPiBooster.exe`. Toutes le
 | `min_free_disk_mb` | `500` | Espace disque minimum requis sur C: avant installation (MB) |
 | `heartbeat_interval_minutes` | `60` | Intervalle entre deux heartbeats (minutes, minimum 5) |
 | `retry_delay_seconds` | `5` | Délai de base entre tentatives (`×3`, `×6` pour les suivantes) |
+| `circuit_breaker_reset_minutes` | `0` | Auto-reset du circuit breaker (minutes, `0` = désactivé) |
 
 ## Logs
 
@@ -160,7 +166,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.12.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.13.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -185,7 +191,7 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.12.0",
+  "version": "v2.13.0",
   "last_check": "2026-02-24T10:15:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
@@ -212,7 +218,7 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 2. `go vet` — analyse statique de base
 3. `staticcheck` — analyse statique avancée
 4. `go test -race -count=1 -timeout 120s` — tests unitaires avec détecteur de races
-5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **30%**)
+5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **35%**)
 6. `go build` — compilation du binaire final
 
 ## Build depuis les sources
@@ -220,5 +226,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.12.0" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.13.0" -o WinPiBooster.exe .
 ```
