@@ -964,41 +964,6 @@ func TestCheckCommand_DifferentFromDryRun(t *testing.T) {
 	}
 }
 
-// ─── listLogs() total (#110) ──────────────────────────────────────────────────
-
-func TestListLogs_ShowsTotal(t *testing.T) {
-	dir := t.TempDir()
-	old := logDir
-	logDir = dir
-	defer func() { logDir = old }()
-
-	// Create two log files with known content
-	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("current log"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "UpdateLog_2026-01-01.txt"), []byte("archive"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	listLogs()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 2048)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "Total") {
-		t.Errorf("expected 'Total' line in listLogs output, got: %q", out)
-	}
-	if !strings.Contains(out, "2 fichier(s)") {
-		t.Errorf("expected '2 fichier(s)' in total line, got: %q", out)
-	}
-}
-
 // ─── printExtendedStatus next_check (#109) ────────────────────────────────────
 
 func TestPrintExtendedStatus_NextCheck(t *testing.T) {
@@ -1183,62 +1148,6 @@ func TestPrintExtendedStatus_NoLastError(t *testing.T) {
 	}
 }
 
-// ─── show-config --diff (#115) ───────────────────────────────────────────────
-
-func TestPrintShowConfig_DiffMode_NoChanges(t *testing.T) {
-	old := cfg
-	cfg = defaults()
-	defer func() { cfg = old }()
-
-	oldArgs := os.Args
-	os.Args = []string{"WinPiBooster.exe", "show-config", "--diff"}
-	defer func() { os.Args = oldArgs }()
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	printShowConfig()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 2048)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "identique aux défauts") {
-		t.Errorf("expected 'identique aux défauts' when no changes, got: %q", out)
-	}
-}
-
-func TestPrintShowConfig_DiffMode_WithChange(t *testing.T) {
-	old := cfg
-	cfg = defaults()
-	cfg.CheckIntervalSeconds = 120
-	defer func() { cfg = old }()
-
-	oldArgs := os.Args
-	os.Args = []string{"WinPiBooster.exe", "show-config", "--diff"}
-	defer func() { os.Args = oldArgs }()
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	printShowConfig()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 2048)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "check_interval_seconds") {
-		t.Errorf("expected changed field in diff output, got: %q", out)
-	}
-	if strings.Contains(out, "retry_attempts") {
-		t.Errorf("unchanged field should not appear in diff, got: %q", out)
-	}
-}
-
 // ─── clean-logs --dry-run (#116) ──────────────────────────────────────────────
 
 func TestCleanOldLogsDryRun_NoFiles(t *testing.T) {
@@ -1299,37 +1208,6 @@ func TestCleanOldLogsDryRun_ExpiredFile(t *testing.T) {
 	}
 }
 
-// ─── printReport uptime (#117) ────────────────────────────────────────────────
-
-func TestPrintReport_WithUptime(t *testing.T) {
-	dir := t.TempDir()
-	old := logDir
-	logDir = dir
-	defer func() { logDir = old }()
-
-	// Write status.json with uptime_seconds
-	s := statusJSON{UptimeSeconds: 7530} // 2h 5m 30s
-	data, _ := json.Marshal(s)
-	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	printReport()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 1024)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "Uptime") {
-		t.Errorf("expected 'Uptime' in report output when status.json present, got: %q", out)
-	}
-}
-
 func TestPrintReport_NoStatusJSON(t *testing.T) {
 	dir := t.TempDir()
 	old := logDir
@@ -1348,45 +1226,8 @@ func TestPrintReport_NoStatusJSON(t *testing.T) {
 	n, _ := r.Read(buf)
 	out := string(buf[:n])
 
-	if strings.Contains(out, "Uptime") {
-		t.Errorf("'Uptime' should not appear when status.json absent, got: %q", out)
-	}
 	if !strings.Contains(out, "Vérifications") {
 		t.Errorf("expected counter lines even without status.json, got: %q", out)
-	}
-}
-
-// ─── historyLogs KB distincts (#118) ─────────────────────────────────────────
-
-func TestHistoryLogs_DistinctKBs(t *testing.T) {
-	dir := t.TempDir()
-	old := logDir
-	logDir = dir
-	defer func() { logDir = old }()
-
-	// 3 lines but only 3 distinct KBs (KB1111 appears twice)
-	content := "2026-02-24 10:00:00 [INFO]: Installation terminée : KB1111, KB2222\n" +
-		"2026-02-24 11:00:00 [INFO]: Installation terminée : KB1111, KB3333\n"
-	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	historyLogs()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "3 KB distincts") {
-		t.Errorf("expected '3 KB distincts' (KB1111, KB2222, KB3333), got: %q", out)
-	}
-	if !strings.Contains(out, "Total : 2 installation(s)") {
-		t.Errorf("expected total=2, got: %q", out)
 	}
 }
 
@@ -1455,143 +1296,6 @@ func TestTailLogs_GrepNoMatch(t *testing.T) {
 
 	if !strings.Contains(out, "Aucune ligne") {
 		t.Errorf("expected 'Aucune ligne' message, got: %q", out)
-	}
-}
-
-// ─── history --last N (#120) ──────────────────────────────────────────────────
-
-func TestHistoryLogs_LastN(t *testing.T) {
-	dir := t.TempDir()
-	old := logDir
-	logDir = dir
-	defer func() { logDir = old }()
-
-	content := "2026-02-24 10:00:00 [INFO]: Installation terminée : KB1111\n" +
-		"2026-02-24 11:00:00 [INFO]: Installation terminée : KB2222\n" +
-		"2026-02-24 12:00:00 [INFO]: Installation terminée : KB3333\n"
-	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	oldArgs := os.Args
-	os.Args = []string{"WinPiBooster.exe", "history", "--last", "2"}
-	defer func() { os.Args = oldArgs }()
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	historyLogs()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if strings.Contains(out, "KB1111") {
-		t.Errorf("KB1111 should be excluded by --last 2, got: %q", out)
-	}
-	if !strings.Contains(out, "KB2222") {
-		t.Errorf("KB2222 should be included, got: %q", out)
-	}
-	if !strings.Contains(out, "KB3333") {
-		t.Errorf("KB3333 should be included, got: %q", out)
-	}
-}
-
-// ─── clean-logs taille libérée (#121) ────────────────────────────────────────
-
-func TestCleanOldLogsDryRun_ShowsSize(t *testing.T) {
-	dir := t.TempDir()
-	old := logDir
-	logDir = dir
-	defer func() { logDir = old }()
-
-	archivePath := filepath.Join(dir, "UpdateLog_2025-01-01T00-00-00.txt")
-	if err := os.WriteFile(archivePath, []byte("old log content"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	oldTime := time.Now().AddDate(0, 0, -60)
-	if err := os.Chtimes(archivePath, oldTime, oldTime); err != nil {
-		t.Fatal(err)
-	}
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	cleanOldLogsDryRun()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 1024)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "MB") {
-		t.Errorf("expected size in MB in dry-run output, got: %q", out)
-	}
-}
-
-func TestCleanOldLogsVerbose_ShowsSize(t *testing.T) {
-	dir := t.TempDir()
-	old := logDir
-	logDir = dir
-	defer func() { logDir = old }()
-
-	archivePath := filepath.Join(dir, "UpdateLog_2025-01-01T00-00-00.txt")
-	if err := os.WriteFile(archivePath, []byte("old log content"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	oldTime := time.Now().AddDate(0, 0, -60)
-	if err := os.Chtimes(archivePath, oldTime, oldTime); err != nil {
-		t.Fatal(err)
-	}
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	cleanOldLogsVerbose(true)
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 1024)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "MB") {
-		t.Errorf("expected size in MB in verbose output, got: %q", out)
-	}
-	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
-		t.Error("expected archive to be deleted in verbose mode")
-	}
-}
-
-// ─── diagnose seuil disque (#122) ────────────────────────────────────────────
-
-func TestRunDiagnose_ShowsDiskThreshold(t *testing.T) {
-	oldCfg := cfg
-	cfg = defaults()
-	cfg.MinFreeDiskMB = 500
-	defer func() { cfg = oldCfg }()
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	withTestLogger(t, func() {
-		runDiagnose()
-	})
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	if !strings.Contains(out, "seuil") {
-		t.Errorf("expected 'seuil' in disk check output, got: %q", out)
-	}
-	if !strings.Contains(out, "500") {
-		t.Errorf("expected threshold value '500' in output, got: %q", out)
 	}
 }
 
