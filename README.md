@@ -83,7 +83,6 @@ WinPiBooster.exe
 | `WinPiBooster.exe show-config --json` | Affiche la configuration au format JSON |
 | `WinPiBooster.exe export-config` | Écrit `config.json` depuis la configuration active (`--force` pour écraser) |
 | `WinPiBooster.exe install --start` | Installe ET démarre le service en une seule commande |
-| `WinPiBooster.exe test-notify` | Envoie une notification toast de test |
 | `WinPiBooster.exe version` | Affiche la version |
 | `WinPiBooster.exe --version` | Alias Unix pour `version` |
 | `WinPiBooster.exe help` | Affiche l'aide complète |
@@ -167,7 +166,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.14.3 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.14.4 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -192,7 +191,7 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.14.3",
+  "version": "v2.14.4",
   "last_check": "2026-02-24T10:15:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
@@ -227,5 +226,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.14.3" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.14.4" -o WinPiBooster.exe .
 ```
