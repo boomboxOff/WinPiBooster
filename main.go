@@ -62,6 +62,10 @@ var (
 	psModuleReady bool
 	psModuleMu    sync.Mutex
 
+	// Anti-spam flag: reboot-pending notification sent once per session
+	rebootNotified bool
+	rebootNotifiedMu sync.Mutex
+
 	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
 	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 )
@@ -740,7 +744,14 @@ func runCycle() {
 		if isRebootPending() {
 			msg := "Redémarrage en attente détecté — installation des mises à jour reportée au prochain cycle."
 			log.Warn(msg)
-			showNotification("Redémarrage requis", msg)
+			rebootNotifiedMu.Lock()
+			if !rebootNotified {
+				rebootNotified = true
+				rebootNotifiedMu.Unlock()
+				showNotification("Redémarrage requis", msg)
+			} else {
+				rebootNotifiedMu.Unlock()
+			}
 			return
 		}
 		if min := int64(cfg.MinFreeDiskMB); min > 0 {

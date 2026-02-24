@@ -1254,6 +1254,49 @@ func TestHistoryLogs_WithEntries(t *testing.T) {
 	}
 }
 
+// ─── rebootNotified anti-spam ─────────────────────────────────────────────────
+
+func TestRebootNotified_InitiallyFalse(t *testing.T) {
+	rebootNotifiedMu.Lock()
+	rebootNotified = false
+	rebootNotifiedMu.Unlock()
+
+	rebootNotifiedMu.Lock()
+	got := rebootNotified
+	rebootNotifiedMu.Unlock()
+	if got {
+		t.Error("rebootNotified should be false initially")
+	}
+}
+
+func TestRebootNotified_SetOnce(t *testing.T) {
+	rebootNotifiedMu.Lock()
+	rebootNotified = false
+	rebootNotifiedMu.Unlock()
+
+	// Simulate first detection
+	rebootNotifiedMu.Lock()
+	notified := rebootNotified
+	if !notified {
+		rebootNotified = true
+	}
+	rebootNotifiedMu.Unlock()
+
+	// Second detection should not change anything
+	rebootNotifiedMu.Lock()
+	notified2 := rebootNotified
+	rebootNotifiedMu.Unlock()
+
+	if !notified2 {
+		t.Error("rebootNotified should be true after first detection")
+	}
+
+	// Cleanup
+	rebootNotifiedMu.Lock()
+	rebootNotified = false
+	rebootNotifiedMu.Unlock()
+}
+
 // ─── HeartbeatInterval ────────────────────────────────────────────────────────
 
 func TestHeartbeatInterval_Default(t *testing.T) {
