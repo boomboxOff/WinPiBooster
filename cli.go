@@ -46,6 +46,14 @@ func runDiagnose() bool {
 
 	check("Droits administrateur", checkAdminRights() == nil, "")
 
+	psRaw, psErr := execPS(`$PSVersionTable.PSVersion.ToString()`)
+	psVerOK := psErr == nil && strings.TrimSpace(psRaw) != ""
+	psVerDetail := ""
+	if psVerOK {
+		psVerDetail = "v" + strings.TrimSpace(psRaw)
+	}
+	check("PowerShell", psVerOK, psVerDetail)
+
 	psModOK := isPSWindowsUpdateModuleInstalled()
 	psModDetail := ""
 	if psModOK {
@@ -138,12 +146,16 @@ func listLogs() {
 	}
 
 	found := false
+	var totalBytes int64
+	count := 0
 	for _, p := range entries {
 		info, err := os.Stat(p)
 		if err != nil {
 			continue
 		}
 		found = true
+		count++
+		totalBytes += info.Size()
 		fmt.Printf("  %-40s  %8.1f KB  %s\n",
 			filepath.Base(p),
 			float64(info.Size())/1024.0,
@@ -151,6 +163,9 @@ func listLogs() {
 	}
 	if !found {
 		fmt.Printf("Aucun fichier de log dans %s\n", logDir)
+	} else {
+		fmt.Printf("─────────────────────────────────\n")
+		fmt.Printf("Total : %d fichier(s) — %.1f MB\n", count, float64(totalBytes)/(1024.0*1024.0))
 	}
 }
 
@@ -283,6 +298,18 @@ func printExtendedStatus() {
 		if json.Unmarshal(data, &s) == nil {
 			fmt.Printf("\nDernière vérification (status.json) :\n")
 			fmt.Printf("  last_check         : %s\n", s.LastCheck)
+			if s.NextCheck != "" {
+				if nextT, err2 := time.Parse(time.RFC3339, s.NextCheck); err2 == nil {
+					rem := time.Until(nextT).Round(time.Second)
+					var remStr string
+					if rem > 0 {
+						remStr = fmt.Sprintf("dans %s", rem)
+					} else {
+						remStr = "passé"
+					}
+					fmt.Printf("  next_check         : %s (%s)\n", s.NextCheck, remStr)
+				}
+			}
 			fmt.Printf("  updates_checked    : %d\n", s.UpdatesChecked)
 			fmt.Printf("  updates_installed  : %d\n", s.UpdatesInstalled)
 			fmt.Printf("  updates_skipped    : %d\n", s.UpdatesSkipped)
@@ -318,17 +345,24 @@ func printShowConfig() {
 		fmt.Println("Aucun config.json trouvé — valeurs par défaut utilisées.")
 		fmt.Println()
 	}
-	fmt.Printf("  check_interval_seconds          : %d\n", cfg.CheckIntervalSeconds)
-	fmt.Printf("  retry_attempts                  : %d\n", cfg.RetryAttempts)
-	fmt.Printf("  log_retention_days              : %d\n", cfg.LogRetentionDays)
-	fmt.Printf("  max_log_size_mb                 : %d\n", cfg.MaxLogSizeMB)
-	fmt.Printf("  ps_timeout_minutes              : %d\n", cfg.PSTimeoutMinutes)
-	fmt.Printf("  cmd_timeout_seconds             : %d\n", cfg.CmdTimeoutSeconds)
-	fmt.Printf("  log_level                       : %s\n", cfg.LogLevel)
-	fmt.Printf("  notifications_enabled           : %v\n", cfg.NotificationsOn())
-	fmt.Printf("  min_free_disk_mb                : %d\n", cfg.MinFreeDiskMB)
-	fmt.Printf("  heartbeat_interval_minutes      : %d\n", cfg.HeartbeatIntervalMinutes)
-	fmt.Printf("  retry_delay_seconds             : %d\n", cfg.RetryDelaySeconds)
+	d := defaults()
+	mark := func(same bool) string {
+		if same {
+			return "  (défaut)"
+		}
+		return ""
+	}
+	fmt.Printf("  check_interval_seconds          : %d%s\n", cfg.CheckIntervalSeconds, mark(cfg.CheckIntervalSeconds == d.CheckIntervalSeconds))
+	fmt.Printf("  retry_attempts                  : %d%s\n", cfg.RetryAttempts, mark(cfg.RetryAttempts == d.RetryAttempts))
+	fmt.Printf("  log_retention_days              : %d%s\n", cfg.LogRetentionDays, mark(cfg.LogRetentionDays == d.LogRetentionDays))
+	fmt.Printf("  max_log_size_mb                 : %d%s\n", cfg.MaxLogSizeMB, mark(cfg.MaxLogSizeMB == d.MaxLogSizeMB))
+	fmt.Printf("  ps_timeout_minutes              : %d%s\n", cfg.PSTimeoutMinutes, mark(cfg.PSTimeoutMinutes == d.PSTimeoutMinutes))
+	fmt.Printf("  cmd_timeout_seconds             : %d%s\n", cfg.CmdTimeoutSeconds, mark(cfg.CmdTimeoutSeconds == d.CmdTimeoutSeconds))
+	fmt.Printf("  log_level                       : %s%s\n", cfg.LogLevel, mark(cfg.LogLevel == d.LogLevel))
+	fmt.Printf("  notifications_enabled           : %v%s\n", cfg.NotificationsOn(), mark(cfg.NotificationsOn() == d.NotificationsOn()))
+	fmt.Printf("  min_free_disk_mb                : %d%s\n", cfg.MinFreeDiskMB, mark(cfg.MinFreeDiskMB == d.MinFreeDiskMB))
+	fmt.Printf("  heartbeat_interval_minutes      : %d%s\n", cfg.HeartbeatIntervalMinutes, mark(cfg.HeartbeatIntervalMinutes == d.HeartbeatIntervalMinutes))
+	fmt.Printf("  retry_delay_seconds             : %d%s\n", cfg.RetryDelaySeconds, mark(cfg.RetryDelaySeconds == d.RetryDelaySeconds))
 }
 
 // exportConfig writes the active configuration to config.json in the executable directory.

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // ─── freeDiskMB() ─────────────────────────────────────────────────────────────
@@ -42,6 +43,9 @@ func TestRunDiagnose_NoPanic(t *testing.T) {
 
 	if !strings.Contains(out, "PSWindowsUpdate") {
 		t.Errorf("expected 'PSWindowsUpdate' in diagnose output, got: %s", out)
+	}
+	if !strings.Contains(out, "PowerShell") {
+		t.Errorf("expected 'PowerShell' in diagnose output, got: %s", out)
 	}
 }
 
@@ -957,5 +961,141 @@ func TestCheckCommand_DifferentFromDryRun(t *testing.T) {
 	}
 	if cmd != "check" {
 		t.Errorf("cmd should be 'check', got %q", cmd)
+	}
+}
+
+// ─── listLogs() total (#110) ──────────────────────────────────────────────────
+
+func TestListLogs_ShowsTotal(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Create two log files with known content
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("current log"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog_2026-01-01.txt"), []byte("archive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	listLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 2048)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "Total") {
+		t.Errorf("expected 'Total' line in listLogs output, got: %q", out)
+	}
+	if !strings.Contains(out, "2 fichier(s)") {
+		t.Errorf("expected '2 fichier(s)' in total line, got: %q", out)
+	}
+}
+
+// ─── printExtendedStatus next_check (#109) ────────────────────────────────────
+
+func TestPrintExtendedStatus_NextCheck(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	// Write status.json with a next_check in the future
+	nextCheckTime := time.Now().Add(60 * time.Second).UTC()
+	s := statusJSON{
+		Version:   "dev",
+		LastCheck: time.Now().UTC().Format(time.RFC3339),
+		NextCheck: nextCheckTime.Format(time.RFC3339),
+	}
+	data, _ := json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "next_check") {
+		t.Errorf("expected 'next_check' in output, got: %q", out)
+	}
+	if !strings.Contains(out, "dans") {
+		t.Errorf("expected 'dans' (time remaining) in output, got: %q", out)
+	}
+}
+
+// ─── printShowConfig default markers (#113) ───────────────────────────────────
+
+func TestPrintShowConfig_DefaultMarker(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "(défaut)") {
+		t.Errorf("expected '(défaut)' marker for default values, got: %q", out)
+	}
+}
+
+func TestPrintShowConfig_NonDefaultNoMarker(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.CheckIntervalSeconds = 120 // non-default value
+	defer func() { cfg = old }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	// check_interval_seconds is 120 (not default 60) — find its line
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "check_interval_seconds") {
+			if strings.Contains(line, "(défaut)") {
+				t.Errorf("check_interval_seconds=120 should NOT be marked as default: %q", line)
+			}
+			break
+		}
+	}
+	// Other fields should still have (défaut) marker
+	if !strings.Contains(out, "(défaut)") {
+		t.Errorf("expected other fields to have '(défaut)' marker, got: %q", out)
 	}
 }
