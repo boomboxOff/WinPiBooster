@@ -651,7 +651,12 @@ func retryBackoff(name string, maxAttempts int, backoffDelays []time.Duration, f
 	return err
 }
 
-var defaultBackoff = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second}
+// defaultBackoff builds the retry delay sequence from cfg.RetryDelaySeconds.
+// Delays are: base, base×3, base×6  (e.g. 5s, 15s, 30s with default base=5s).
+func defaultBackoff() []time.Duration {
+	base := cfg.RetryDelay()
+	return []time.Duration{base, base * 3, base * 6}
+}
 
 func retryAttempts() int {
 	if cfg.RetryAttempts > 0 {
@@ -716,7 +721,7 @@ func runCycle() {
 
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
-	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff, installPSWindowsUpdateModule); err != nil {
+	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff(), installPSWindowsUpdateModule); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
 		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
@@ -724,7 +729,7 @@ func runCycle() {
 		return
 	}
 
-	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff, ensureWindowsUpdateServiceRunning); err != nil {
+	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff(), ensureWindowsUpdateServiceRunning); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
 		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
@@ -763,7 +768,7 @@ func runCycle() {
 				return
 			}
 		}
-		err := retryBackoff("installUpdates", retryAttempts(), defaultBackoff, func() error {
+		err := retryBackoff("installUpdates", retryAttempts(), defaultBackoff(), func() error {
 			return installUpdates(updates)
 		})
 		if err != nil {

@@ -33,6 +33,7 @@ type Config struct {
 	NotificationsEnabled       *bool  `json:"notifications_enabled"`
 	MinFreeDiskMB              int    `json:"min_free_disk_mb"`
 	HeartbeatIntervalMinutes   int    `json:"heartbeat_interval_minutes"`
+	RetryDelaySeconds          int    `json:"retry_delay_seconds"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -50,6 +51,7 @@ func defaults() Config {
 		NotificationsEnabled:       boolPtr(true),
 		MinFreeDiskMB:              500,
 		HeartbeatIntervalMinutes:   60,
+		RetryDelaySeconds:          5,
 	}
 }
 
@@ -115,6 +117,9 @@ func loadConfig() Config {
 	if partial.HeartbeatIntervalMinutes > 0 {
 		cfg.HeartbeatIntervalMinutes = partial.HeartbeatIntervalMinutes
 	}
+	if partial.RetryDelaySeconds > 0 {
+		cfg.RetryDelaySeconds = partial.RetryDelaySeconds
+	}
 
 	return cfg
 }
@@ -142,6 +147,11 @@ func (c Config) CmdTimeout() time.Duration {
 // HeartbeatInterval returns the heartbeat interval as a time.Duration.
 func (c Config) HeartbeatInterval() time.Duration {
 	return time.Duration(c.HeartbeatIntervalMinutes) * time.Minute
+}
+
+// RetryDelay returns the base retry delay as a time.Duration.
+func (c Config) RetryDelay() time.Duration {
+	return time.Duration(c.RetryDelaySeconds) * time.Second
 }
 
 // validateConfig logs a WARN for each field that is outside its acceptable range.
@@ -182,5 +192,8 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.HeartbeatIntervalMinutes < 5 {
 		log.Warnf("config.json : heartbeat_interval_minutes=%d est trop bas (minimum 5) — valeur par défaut utilisée : 60", cfg.HeartbeatIntervalMinutes)
+	}
+	if cfg.RetryDelaySeconds < 1 {
+		log.Warnf("config.json : retry_delay_seconds=%d est trop bas (minimum 1) — valeur par défaut utilisée : 5", cfg.RetryDelaySeconds)
 	}
 }

@@ -1321,6 +1321,44 @@ func TestDefaults_HeartbeatIntervalMinutes(t *testing.T) {
 	}
 }
 
+// ─── RetryDelay / defaultBackoff ──────────────────────────────────────────────
+
+func TestRetryDelay_Default(t *testing.T) {
+	c := defaults()
+	if c.RetryDelay() != 5*time.Second {
+		t.Errorf("expected 5s, got %v", c.RetryDelay())
+	}
+}
+
+func TestRetryDelay_Custom(t *testing.T) {
+	c := defaults()
+	c.RetryDelaySeconds = 10
+	if c.RetryDelay() != 10*time.Second {
+		t.Errorf("expected 10s, got %v", c.RetryDelay())
+	}
+}
+
+func TestDefaultBackoff_UsesConfig(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.RetryDelaySeconds = 2
+	defer func() { cfg = old }()
+
+	delays := defaultBackoff()
+	if len(delays) != 3 {
+		t.Fatalf("expected 3 delays, got %d", len(delays))
+	}
+	if delays[0] != 2*time.Second {
+		t.Errorf("delays[0] = %v, want 2s", delays[0])
+	}
+	if delays[1] != 6*time.Second {
+		t.Errorf("delays[1] = %v, want 6s", delays[1])
+	}
+	if delays[2] != 12*time.Second {
+		t.Errorf("delays[2] = %v, want 12s", delays[2])
+	}
+}
+
 // ─── min() ────────────────────────────────────────────────────────────────────
 
 func TestMin(t *testing.T) {
