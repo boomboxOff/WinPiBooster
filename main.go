@@ -202,7 +202,11 @@ func showNotification(title, message string) {
 
 func archiveOldLogs() {
 	logPath := filepath.Join(logDir, "UpdateLog.txt")
-	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+	info, err := os.Stat(logPath)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err == nil && info.Size() == 0 {
 		return
 	}
 

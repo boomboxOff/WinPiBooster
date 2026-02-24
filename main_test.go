@@ -425,6 +425,67 @@ func TestWriteStatusJSON_IncludesLastInstalled(t *testing.T) {
 	}
 }
 
+// ─── archiveOldLogs() ─────────────────────────────────────────────────────────
+
+func TestArchiveOldLogs_SkipsEmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Create an empty UpdateLog.txt
+	logPath := filepath.Join(dir, "UpdateLog.txt")
+	if err := os.WriteFile(logPath, []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	archiveOldLogs()
+
+	// The file should still exist (not renamed/archived)
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		t.Error("empty UpdateLog.txt should NOT be archived")
+	}
+	// No archive should have been created
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if e.Name() != "UpdateLog.txt" {
+			t.Errorf("unexpected archive created: %s", e.Name())
+		}
+	}
+}
+
+func TestArchiveOldLogs_ArchivesNonEmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	logPath := filepath.Join(dir, "UpdateLog.txt")
+	if err := os.WriteFile(logPath, []byte("some log content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	withTestLogger(t, func() {
+		archiveOldLogs()
+	})
+
+	// Original path should no longer exist (renamed to archive)
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Error("non-empty UpdateLog.txt should have been archived (renamed)")
+	}
+	// An archive file should have been created
+	entries, _ := os.ReadDir(dir)
+	found := false
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "UpdateLog_") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected an archive file to be created")
+	}
+}
+
 // ─── install --start flag detection ───────────────────────────────────────────
 
 func TestInstallStartFlag_Detected(t *testing.T) {
