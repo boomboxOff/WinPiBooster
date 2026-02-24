@@ -201,11 +201,6 @@ func showNotification(title, message string) {
 	}
 }
 
-// testNotify sends a test toast notification and prints a confirmation.
-func testNotify() {
-	showNotification("WinPiBooster — Test", "Les notifications fonctionnent correctement.")
-	fmt.Println("Notification de test envoyée.")
-}
 
 // ─── Update logic ─────────────────────────────────────────────────────────────
 
@@ -1275,7 +1270,6 @@ Usage:
   WinPiBooster.exe history --since DATE  Filtre les installations depuis DATE (format YYYY-MM-DD)
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
-  WinPiBooster.exe test-notify       Envoie une notification toast de test
   WinPiBooster.exe reset-counters    Remet les compteurs à zéro et réécrit status.json
   WinPiBooster.exe show-config       Affiche la configuration active
   WinPiBooster.exe show-config --json  Affiche la configuration au format JSON
@@ -1391,8 +1385,6 @@ func main() {
 		openLogs()
 	case "report":
 		printReport()
-	case "test-notify":
-		testNotify()
 	case "reset-counters":
 		resetCounters()
 	case "show-config":

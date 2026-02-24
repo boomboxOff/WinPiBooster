@@ -1007,28 +1007,6 @@ func TestResetCounters(t *testing.T) {
 	}
 }
 
-// ─── testNotify() ─────────────────────────────────────────────────────────────
-
-func TestTestNotify_NoPanic(t *testing.T) {
-	// toast.Push() will fail silently in a test environment — just verify no panic.
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("Pipe: %v", err)
-	}
-	old := os.Stdout
-	os.Stdout = w
-	testNotify()
-	w.Close()
-	os.Stdout = old
-
-	buf := make([]byte, 256)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-	if !strings.Contains(out, "Notification de test envoyée") {
-		t.Errorf("expected confirmation message, got: %s", out)
-	}
-}
-
 // ─── weekly report ────────────────────────────────────────────────────────────
 
 func TestBuildWeeklyReport(t *testing.T) {
