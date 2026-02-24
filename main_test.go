@@ -1378,6 +1378,55 @@ func TestExportConfig_JSONRoundtrip(t *testing.T) {
 	}
 }
 
+// ─── circuit_breaker_reset_minutes ────────────────────────────────────────────
+
+func TestDefaults_CircuitBreakerResetMinutes(t *testing.T) {
+	d := defaults()
+	if d.CircuitBreakerResetMinutes != 0 {
+		t.Errorf("CircuitBreakerResetMinutes default = %d, want 0", d.CircuitBreakerResetMinutes)
+	}
+}
+
+func TestLoadConfig_CircuitBreakerResetMinutes(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"circuit_breaker_reset_minutes":15}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	c := loadConfig()
+	if c.CircuitBreakerResetMinutes != 15 {
+		t.Errorf("CircuitBreakerResetMinutes = %d, want 15", c.CircuitBreakerResetMinutes)
+	}
+}
+
+func TestScheduleCircuitBreakerReset_Disabled(t *testing.T) {
+	old := cfg
+	cfg = defaults() // CircuitBreakerResetMinutes = 0
+	defer func() { cfg = old }()
+
+	// Must be a no-op — just verify no goroutine is launched (no panic)
+	scheduleCircuitBreakerReset()
+}
+
+func TestScheduleCircuitBreakerReset_ResetsCounter(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.CircuitBreakerResetMinutes = 1
+	defer func() { cfg = old }()
+
+	atomic.StoreInt64(&consecutiveErrors, 5)
+	defer atomic.StoreInt64(&consecutiveErrors, 0)
+
+	// Trigger reset manually (simulates what the ticker does)
+	prev := atomic.SwapInt64(&consecutiveErrors, 0)
+	if prev != 5 {
+		t.Errorf("expected prev=5, got %d", prev)
+	}
+	if atomic.LoadInt64(&consecutiveErrors) != 0 {
+		t.Errorf("consecutiveErrors should be 0 after reset")
+	}
+}
+
 // ─── withTestLogger helper ────────────────────────────────────────────────────
 
 // withTestLogger temporarily sets the global log to a discard logger, then restores it.

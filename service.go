@@ -32,6 +32,7 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	heartbeat()
 	scheduleDailyReport()
 	scheduleWeeklyReport()
+	scheduleCircuitBreakerReset()
 	go runCycle()
 
 	go func() {

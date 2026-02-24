@@ -530,6 +530,29 @@ func scheduleWeeklyReport() {
 	}()
 }
 
+// scheduleCircuitBreakerReset starts a periodic ticker that resets consecutiveErrors
+// every cfg.CircuitBreakerResetMinutes minutes. No-op if the config value is 0.
+func scheduleCircuitBreakerReset() {
+	if cfg.CircuitBreakerResetMinutes <= 0 {
+		return
+	}
+	ticker := time.NewTicker(time.Duration(cfg.CircuitBreakerResetMinutes) * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				prev := atomic.SwapInt64(&consecutiveErrors, 0)
+				if prev > 0 && log != nil {
+					log.Debugf("Circuit breaker : auto-reset après %d min (%d erreurs consécutives remises à zéro).", cfg.CircuitBreakerResetMinutes, prev)
+				}
+			case <-shutdownCtx.Done():
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+}
+
 // formatUptime formats a duration as "Xh Ym Zs" (hours optional if zero).
 func formatUptime(d time.Duration) string {
 	d = d.Round(time.Second)
@@ -919,6 +942,7 @@ func runInteractive() {
 
 	scheduleDailyReport()
 	scheduleWeeklyReport()
+	scheduleCircuitBreakerReset()
 	go runCycle()
 
 	cycleTicker := time.NewTicker(cfg.CheckInterval())

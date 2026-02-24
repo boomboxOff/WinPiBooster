@@ -32,8 +32,9 @@ type Config struct {
 	LogLevel                   string `json:"log_level"`
 	NotificationsEnabled       *bool  `json:"notifications_enabled"`
 	MinFreeDiskMB              int    `json:"min_free_disk_mb"`
-	HeartbeatIntervalMinutes   int    `json:"heartbeat_interval_minutes"`
-	RetryDelaySeconds          int    `json:"retry_delay_seconds"`
+	HeartbeatIntervalMinutes        int    `json:"heartbeat_interval_minutes"`
+	RetryDelaySeconds               int    `json:"retry_delay_seconds"`
+	CircuitBreakerResetMinutes      int    `json:"circuit_breaker_reset_minutes"`
 }
 
 // defaults returns a Config populated with the built-in default values.
@@ -50,8 +51,9 @@ func defaults() Config {
 		LogLevel:                   "info",
 		NotificationsEnabled:       boolPtr(true),
 		MinFreeDiskMB:              500,
-		HeartbeatIntervalMinutes:   60,
-		RetryDelaySeconds:          5,
+		HeartbeatIntervalMinutes:        60,
+		RetryDelaySeconds:               5,
+		CircuitBreakerResetMinutes:      0, // 0 = disabled
 	}
 }
 
@@ -119,6 +121,9 @@ func loadConfig() Config {
 	}
 	if partial.RetryDelaySeconds > 0 {
 		cfg.RetryDelaySeconds = partial.RetryDelaySeconds
+	}
+	if partial.CircuitBreakerResetMinutes > 0 {
+		cfg.CircuitBreakerResetMinutes = partial.CircuitBreakerResetMinutes
 	}
 
 	return cfg
@@ -195,5 +200,8 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.RetryDelaySeconds < 1 {
 		log.Warnf("config.json : retry_delay_seconds=%d est trop bas (minimum 1) — valeur par défaut utilisée : 5", cfg.RetryDelaySeconds)
+	}
+	if cfg.CircuitBreakerResetMinutes < 0 {
+		log.Warnf("config.json : circuit_breaker_reset_minutes=%d invalide (doit être ≥ 0, 0 = désactivé)", cfg.CircuitBreakerResetMinutes)
 	}
 }
