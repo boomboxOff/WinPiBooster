@@ -1,5 +1,7 @@
-node_modules/
-UpdateLog*.txt
-SnoreToast/
 WinPiBooster.exe
+*.exe~
+UpdateLog*.txt
+status.json
+config.json
+coverage.out
 vendor/
