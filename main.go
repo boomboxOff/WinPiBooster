@@ -168,16 +168,42 @@ func execPS(psCmd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// deaccent replaces French accented characters with their ASCII equivalents.
+// gopkg.in/toast.v1 reads its temp XML file without -Encoding UTF8, so UTF-8
+// multi-byte sequences are misread as ANSI (cp1252) on French Windows.
+var deaccentReplacer = strings.NewReplacer(
+	"à", "a", "â", "a", "á", "a",
+	"è", "e", "é", "e", "ê", "e", "ë", "e",
+	"î", "i", "ï", "i", "í", "i",
+	"ô", "o", "ö", "o", "ó", "o",
+	"ù", "u", "û", "u", "ü", "u", "ú", "u",
+	"ç", "c",
+	"ñ", "n",
+	"À", "A", "Â", "A", "Á", "A",
+	"È", "E", "É", "E", "Ê", "E", "Ë", "E",
+	"Î", "I", "Ï", "I", "Í", "I",
+	"Ô", "O", "Ö", "O", "Ó", "O",
+	"Ù", "U", "Û", "U", "Ü", "U", "Ú", "U",
+	"Ç", "C",
+	"Ñ", "N",
+	"æ", "ae", "Æ", "AE",
+	"œ", "oe", "Œ", "OE",
+)
+
+func deaccent(s string) string { return deaccentReplacer.Replace(s) }
+
 // showNotification sends a Windows toast notification (best-effort).
 // Does nothing if notifications are disabled in config.
+// Accented characters are transliterated to ASCII to work around a toast.v1
+// encoding bug (Get-Content without -Encoding UTF8).
 func showNotification(title, message string) {
 	if !cfg.NotificationsOn() {
 		return
 	}
 	n := toast.Notification{
 		AppID:   "WinPiBooster",
-		Title:   title,
-		Message: message,
+		Title:   deaccent(title),
+		Message: deaccent(message),
 		Audio:   toast.Default,
 	}
 	if err := n.Push(); err != nil {

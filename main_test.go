@@ -2867,3 +2867,73 @@ func TestPrintHelp_ContainsHistorySince(t *testing.T) {
 		t.Errorf("printHelp should mention '--since', got: %s", out)
 	}
 }
+
+// ─── deaccent (#103) ──────────────────────────────────────────────────────────
+
+func TestDeaccent_NoAccents(t *testing.T) {
+	in := "Hello World 123"
+	if got := deaccent(in); got != in {
+		t.Errorf("deaccent(%q) = %q, want %q", in, got, in)
+	}
+}
+
+func TestDeaccent_LowerCase(t *testing.T) {
+	cases := map[string]string{
+		"à": "a", "â": "a",
+		"è": "e", "é": "e", "ê": "e", "ë": "e",
+		"î": "i", "ï": "i",
+		"ô": "o",
+		"ù": "u", "û": "u", "ü": "u",
+		"ç": "c",
+	}
+	for in, want := range cases {
+		if got := deaccent(in); got != want {
+			t.Errorf("deaccent(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestDeaccent_UpperCase(t *testing.T) {
+	cases := map[string]string{
+		"À": "A", "Â": "A",
+		"È": "E", "É": "E", "Ê": "E", "Ë": "E",
+		"Î": "I", "Ï": "I",
+		"Ô": "O",
+		"Ù": "U", "Û": "U", "Ü": "U",
+		"Ç": "C",
+	}
+	for in, want := range cases {
+		if got := deaccent(in); got != want {
+			t.Errorf("deaccent(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestDeaccent_Ligatures(t *testing.T) {
+	if got := deaccent("æ"); got != "ae" {
+		t.Errorf("deaccent(æ) = %q, want %q", got, "ae")
+	}
+	if got := deaccent("Æ"); got != "AE" {
+		t.Errorf("deaccent(Æ) = %q, want %q", got, "AE")
+	}
+	if got := deaccent("œ"); got != "oe" {
+		t.Errorf("deaccent(œ) = %q, want %q", got, "oe")
+	}
+	if got := deaccent("Œ"); got != "OE" {
+		t.Errorf("deaccent(Œ) = %q, want %q", got, "OE")
+	}
+}
+
+func TestDeaccent_FullSentence(t *testing.T) {
+	in := "Mises à jour Windows installées : KB5034441"
+	want := "Mises a jour Windows installees : KB5034441"
+	if got := deaccent(in); got != want {
+		t.Errorf("deaccent(%q) = %q, want %q", in, got, want)
+	}
+}
+
+func TestDeaccent_Empty(t *testing.T) {
+	if got := deaccent(""); got != "" {
+		t.Errorf("deaccent(\"\") = %q, want \"\"", got)
+	}
+}
