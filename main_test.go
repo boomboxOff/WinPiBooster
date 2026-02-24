@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1318,6 +1320,176 @@ func TestDefaults_HeartbeatIntervalMinutes(t *testing.T) {
 	c := defaults()
 	if c.HeartbeatIntervalMinutes != 60 {
 		t.Errorf("expected 60, got %d", c.HeartbeatIntervalMinutes)
+	}
+}
+
+// ─── withTestLogger helper ────────────────────────────────────────────────────
+
+// withTestLogger temporarily sets the global log to a discard logger, then restores it.
+func withTestLogger(t *testing.T, fn func()) {
+	t.Helper()
+	oldLog := log
+	l := logrus.New()
+	l.SetOutput(io.Discard)
+	log = l
+	defer func() { log = oldLog }()
+	fn()
+}
+
+// ─── validateConfig (with logger) ─────────────────────────────────────────────
+
+func TestValidateConfig_WithLogger_AllBranches(t *testing.T) {
+	withTestLogger(t, func() {
+		c := defaults()
+		c.CheckIntervalSeconds = 5
+		c.RetryAttempts = 0
+		c.LogRetentionDays = 0
+		c.MaxLogSizeMB = 0
+		c.PSTimeoutMinutes = 0
+		c.CmdTimeoutSeconds = 5
+		c.CircuitBreakerThreshold = 0
+		c.CircuitBreakerPauseMinutes = 0
+		c.LogLevel = "verbose"
+		c.MinFreeDiskMB = 50
+		c.HeartbeatIntervalMinutes = 2
+		c.RetryDelaySeconds = 0
+		validateConfig(c) // must not panic, all warn branches covered
+	})
+}
+
+func TestValidateConfig_WithLogger_ValidDefaults(t *testing.T) {
+	withTestLogger(t, func() {
+		validateConfig(defaults()) // no warnings, just runs through
+	})
+}
+
+// ─── retryAttempts ────────────────────────────────────────────────────────────
+
+func TestRetryAttempts_Default(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	if got := retryAttempts(); got != 3 {
+		t.Errorf("retryAttempts() = %d, want 3", got)
+	}
+}
+
+func TestRetryAttempts_Custom(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.RetryAttempts = 5
+	defer func() { cfg = old }()
+
+	if got := retryAttempts(); got != 5 {
+		t.Errorf("retryAttempts() = %d, want 5", got)
+	}
+}
+
+// ─── retryBackoff ─────────────────────────────────────────────────────────────
+
+func TestRetryBackoff_SuccessOnFirst(t *testing.T) {
+	withTestLogger(t, func() {
+		called := 0
+		err := retryBackoff("test", 3, []time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 3 * time.Millisecond}, func() error {
+			called++
+			return nil
+		})
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+		if called != 1 {
+			t.Errorf("expected 1 call, got %d", called)
+		}
+	})
+}
+
+func TestRetryBackoff_FailsAllAttempts(t *testing.T) {
+	withTestLogger(t, func() {
+		called := 0
+		testErr := errors.New("test error")
+		err := retryBackoff("test", 2, []time.Duration{1 * time.Millisecond}, func() error {
+			called++
+			return testErr
+		})
+		if err != testErr {
+			t.Errorf("expected testErr, got %v", err)
+		}
+		if called != 2 {
+			t.Errorf("expected 2 calls, got %d", called)
+		}
+	})
+}
+
+func TestRetryBackoff_SuccessOnSecond(t *testing.T) {
+	withTestLogger(t, func() {
+		attempt := 0
+		testErr := errors.New("fail once")
+		err := retryBackoff("test", 3, []time.Duration{1 * time.Millisecond, 2 * time.Millisecond}, func() error {
+			attempt++
+			if attempt == 1 {
+				return testErr
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("expected nil on second attempt, got %v", err)
+		}
+	})
+}
+
+// ─── generateWeeklyReport ─────────────────────────────────────────────────────
+
+func TestGenerateWeeklyReport_NilLog(t *testing.T) {
+	atomic.StoreInt64(&weeklyChecked, 3)
+	atomic.StoreInt64(&weeklyInstalled, 1)
+	atomic.StoreInt64(&weeklySkipped, 2)
+	atomic.StoreInt64(&weeklyErrors, 0)
+	defer func() {
+		for _, p := range []*int64{&weeklyChecked, &weeklyInstalled, &weeklySkipped, &weeklyErrors} {
+			atomic.StoreInt64(p, 0)
+		}
+	}()
+
+	generateWeeklyReport() // log is nil, must not panic
+
+	// counters should be reset to 0
+	if atomic.LoadInt64(&weeklyChecked) != 0 {
+		t.Errorf("weeklyChecked should be 0 after report, got %d", atomic.LoadInt64(&weeklyChecked))
+	}
+}
+
+// ─── cleanOldLogs ─────────────────────────────────────────────────────────────
+
+func TestCleanOldLogs_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+	// Must not panic or return error
+	cleanOldLogs()
+}
+
+func TestCleanOldLogs_DeletesExpired(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Write an old archive (modification time set to 60 days ago)
+	oldFile := filepath.Join(dir, "UpdateLog_old.txt")
+	if err := os.WriteFile(oldFile, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pastTime := time.Now().Add(-60 * 24 * time.Hour)
+	if err := os.Chtimes(oldFile, pastTime, pastTime); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanOldLogs()
+
+	if _, err := os.Stat(oldFile); !os.IsNotExist(err) {
+		t.Error("expected old log file to be deleted")
 	}
 }
 
