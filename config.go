@@ -21,39 +21,33 @@ var validLogLevels = map[string]bool{
 // Config holds runtime parameters loaded from config.json.
 // All fields are optional — missing keys fall back to defaults.
 type Config struct {
-	CheckIntervalSeconds       int `json:"check_interval_seconds"`
-	RetryAttempts              int `json:"retry_attempts"`
-	LogRetentionDays           int `json:"log_retention_days"`
-	MaxLogSizeMB               int `json:"max_log_size_mb"`
-	PSTimeoutMinutes           int `json:"ps_timeout_minutes"`
-	CmdTimeoutSeconds          int `json:"cmd_timeout_seconds"`
-	CircuitBreakerThreshold    int    `json:"circuit_breaker_threshold"`
-	CircuitBreakerPauseMinutes int    `json:"circuit_breaker_pause_minutes"`
-	LogLevel                   string `json:"log_level"`
-	NotificationsEnabled       *bool  `json:"notifications_enabled"`
-	MinFreeDiskMB              int    `json:"min_free_disk_mb"`
-	HeartbeatIntervalMinutes        int    `json:"heartbeat_interval_minutes"`
-	RetryDelaySeconds               int    `json:"retry_delay_seconds"`
-	CircuitBreakerResetMinutes      int    `json:"circuit_breaker_reset_minutes"`
+	CheckIntervalSeconds    int    `json:"check_interval_seconds"`
+	RetryAttempts           int    `json:"retry_attempts"`
+	LogRetentionDays        int    `json:"log_retention_days"`
+	MaxLogSizeMB            int    `json:"max_log_size_mb"`
+	PSTimeoutMinutes        int    `json:"ps_timeout_minutes"`
+	CmdTimeoutSeconds       int    `json:"cmd_timeout_seconds"`
+	LogLevel                string `json:"log_level"`
+	NotificationsEnabled    *bool  `json:"notifications_enabled"`
+	MinFreeDiskMB           int    `json:"min_free_disk_mb"`
+	HeartbeatIntervalMinutes int   `json:"heartbeat_interval_minutes"`
+	RetryDelaySeconds       int    `json:"retry_delay_seconds"`
 }
 
 // defaults returns a Config populated with the built-in default values.
 func defaults() Config {
 	return Config{
-		CheckIntervalSeconds:       60,
-		RetryAttempts:              3,
-		LogRetentionDays:           30,
-		MaxLogSizeMB:               10,
-		PSTimeoutMinutes:           10,
-		CmdTimeoutSeconds:          300,
-		CircuitBreakerThreshold:    5,
-		CircuitBreakerPauseMinutes: 30,
-		LogLevel:                   "info",
-		NotificationsEnabled:       boolPtr(true),
-		MinFreeDiskMB:              500,
-		HeartbeatIntervalMinutes:        60,
-		RetryDelaySeconds:               5,
-		CircuitBreakerResetMinutes:      0, // 0 = disabled
+		CheckIntervalSeconds:     60,
+		RetryAttempts:            3,
+		LogRetentionDays:         30,
+		MaxLogSizeMB:             10,
+		PSTimeoutMinutes:         10,
+		CmdTimeoutSeconds:        300,
+		LogLevel:                 "info",
+		NotificationsEnabled:     boolPtr(true),
+		MinFreeDiskMB:            500,
+		HeartbeatIntervalMinutes: 60,
+		RetryDelaySeconds:        5,
 	}
 }
 
@@ -101,12 +95,6 @@ func loadConfig() Config {
 	if partial.CmdTimeoutSeconds > 0 {
 		cfg.CmdTimeoutSeconds = partial.CmdTimeoutSeconds
 	}
-	if partial.CircuitBreakerThreshold > 0 {
-		cfg.CircuitBreakerThreshold = partial.CircuitBreakerThreshold
-	}
-	if partial.CircuitBreakerPauseMinutes > 0 {
-		cfg.CircuitBreakerPauseMinutes = partial.CircuitBreakerPauseMinutes
-	}
 	if partial.LogLevel != "" {
 		cfg.LogLevel = partial.LogLevel
 	}
@@ -121,9 +109,6 @@ func loadConfig() Config {
 	}
 	if partial.RetryDelaySeconds > 0 {
 		cfg.RetryDelaySeconds = partial.RetryDelaySeconds
-	}
-	if partial.CircuitBreakerResetMinutes > 0 {
-		cfg.CircuitBreakerResetMinutes = partial.CircuitBreakerResetMinutes
 	}
 
 	return cfg
@@ -183,12 +168,6 @@ func validateConfig(cfg Config) {
 	if cfg.CmdTimeoutSeconds < 10 {
 		log.Warnf("config.json : cmd_timeout_seconds=%d est trop bas (minimum 10) — valeur par défaut utilisée : 300", cfg.CmdTimeoutSeconds)
 	}
-	if cfg.CircuitBreakerThreshold < 1 {
-		log.Warnf("config.json : circuit_breaker_threshold=%d est trop bas (minimum 1) — valeur par défaut utilisée : 5", cfg.CircuitBreakerThreshold)
-	}
-	if cfg.CircuitBreakerPauseMinutes < 1 {
-		log.Warnf("config.json : circuit_breaker_pause_minutes=%d est trop bas (minimum 1) — valeur par défaut utilisée : 30", cfg.CircuitBreakerPauseMinutes)
-	}
 	if cfg.LogLevel != "" && !validLogLevels[cfg.LogLevel] {
 		log.Warnf("config.json : log_level=%q inconnu (valeurs acceptées : debug, info, warn, error) — valeur par défaut utilisée : info", cfg.LogLevel)
 	}
@@ -200,8 +179,5 @@ func validateConfig(cfg Config) {
 	}
 	if cfg.RetryDelaySeconds < 1 {
 		log.Warnf("config.json : retry_delay_seconds=%d est trop bas (minimum 1) — valeur par défaut utilisée : 5", cfg.RetryDelaySeconds)
-	}
-	if cfg.CircuitBreakerResetMinutes < 0 {
-		log.Warnf("config.json : circuit_breaker_reset_minutes=%d invalide (doit être ≥ 0, 0 = désactivé)", cfg.CircuitBreakerResetMinutes)
 	}
 }

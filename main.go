@@ -40,7 +40,6 @@ var (
 	updatesInstalled  int64
 	updatesSkipped    int64
 	cycleErrors       int64
-	consecutiveErrors int64 // reset to 0 on each successful cycle
 
 	// Weekly accumulators — fed by generateDailyReport, reset by generateWeeklyReport
 	weeklyChecked   int64
@@ -542,28 +541,6 @@ func scheduleWeeklyReport() {
 	}()
 }
 
-// scheduleCircuitBreakerReset starts a periodic ticker that resets consecutiveErrors
-// every cfg.CircuitBreakerResetMinutes minutes. No-op if the config value is 0.
-func scheduleCircuitBreakerReset() {
-	if cfg.CircuitBreakerResetMinutes <= 0 {
-		return
-	}
-	ticker := time.NewTicker(time.Duration(cfg.CircuitBreakerResetMinutes) * time.Minute)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				prev := atomic.SwapInt64(&consecutiveErrors, 0)
-				if prev > 0 && log != nil {
-					log.Debugf("Circuit breaker : auto-reset après %d min (%d erreurs consécutives remises à zéro).", cfg.CircuitBreakerResetMinutes, prev)
-				}
-			case <-shutdownCtx.Done():
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-}
 
 // formatUptime formats a duration as "Xh Ym Zs" (hours optional if zero).
 func formatUptime(d time.Duration) string {
@@ -753,31 +730,16 @@ func runCycle() {
 		return
 	}
 
-	// Circuit breaker: pause if too many consecutive errors.
-	threshold := int64(cfg.CircuitBreakerThreshold)
-	if threshold > 0 && atomic.LoadInt64(&consecutiveErrors) >= threshold {
-		pause := time.Duration(cfg.CircuitBreakerPauseMinutes) * time.Minute
-		log.Warnf("Circuit ouvert (%d erreurs consécutives) — pause de %v avant le prochain cycle.", threshold, pause)
-		select {
-		case <-time.After(pause):
-		case <-shutdownCtx.Done():
-			return
-		}
-		atomic.StoreInt64(&consecutiveErrors, 0)
-	}
-
 	log.Debug("Lancement du processus de mise à jour Windows...")
 
 	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff(), installPSWindowsUpdateModule); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
-		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		return
 	}
 
 	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff(), ensureWindowsUpdateServiceRunning); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
-		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		return
 	}
@@ -785,7 +747,6 @@ func runCycle() {
 	updates, err := checkAvailableUpdates()
 	if err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
-		atomic.AddInt64(&consecutiveErrors, 1)
 		// Error already logged inside checkAvailableUpdates
 		return
 	}
@@ -807,14 +768,11 @@ func runCycle() {
 		})
 		if err != nil {
 			atomic.AddInt64(&cycleErrors, 1)
-			atomic.AddInt64(&consecutiveErrors, 1)
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 			return
 		}
 	}
 
-	// Successful cycle — reset consecutive error counter.
-	atomic.StoreInt64(&consecutiveErrors, 0)
 	writeStatusJSON()
 	log.Debug("Processus terminé.")
 }
@@ -951,7 +909,6 @@ func runInteractive() {
 
 	scheduleDailyReport()
 	scheduleWeeklyReport()
-	scheduleCircuitBreakerReset()
 	go runCycle()
 
 	cycleTicker := time.NewTicker(cfg.CheckInterval())
@@ -1122,9 +1079,6 @@ func printExtendedStatus() {
 	fmt.Printf("  max_log_size_mb              : %d\n", cfg.MaxLogSizeMB)
 	fmt.Printf("  ps_timeout_minutes           : %d\n", cfg.PSTimeoutMinutes)
 	fmt.Printf("  cmd_timeout_seconds          : %d\n", cfg.CmdTimeoutSeconds)
-	fmt.Printf("  circuit_breaker_threshold    : %d\n", cfg.CircuitBreakerThreshold)
-	fmt.Printf("  circuit_breaker_pause_minutes: %d\n", cfg.CircuitBreakerPauseMinutes)
-
 	// Log file size
 	logPath := filepath.Join(logDir, "UpdateLog.txt")
 	if info, err := os.Stat(logPath); err == nil {
@@ -1181,9 +1135,6 @@ func printShowConfig() {
 	fmt.Printf("  max_log_size_mb                 : %d\n", cfg.MaxLogSizeMB)
 	fmt.Printf("  ps_timeout_minutes              : %d\n", cfg.PSTimeoutMinutes)
 	fmt.Printf("  cmd_timeout_seconds             : %d\n", cfg.CmdTimeoutSeconds)
-	fmt.Printf("  circuit_breaker_threshold       : %d\n", cfg.CircuitBreakerThreshold)
-	fmt.Printf("  circuit_breaker_pause_minutes   : %d\n", cfg.CircuitBreakerPauseMinutes)
-	fmt.Printf("  circuit_breaker_reset_minutes   : %d\n", cfg.CircuitBreakerResetMinutes)
 	fmt.Printf("  log_level                       : %s\n", cfg.LogLevel)
 	fmt.Printf("  notifications_enabled           : %v\n", cfg.NotificationsOn())
 	fmt.Printf("  min_free_disk_mb                : %d\n", cfg.MinFreeDiskMB)
@@ -1232,7 +1183,6 @@ func resetCounters() {
 	atomic.StoreInt64(&updatesInstalled, 0)
 	atomic.StoreInt64(&updatesSkipped, 0)
 	atomic.StoreInt64(&cycleErrors, 0)
-	atomic.StoreInt64(&consecutiveErrors, 0)
 	lastInstalledMu.Lock()
 	lastInstalled = nil
 	lastInstalledMu.Unlock()

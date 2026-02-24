@@ -542,41 +542,6 @@ func TestWriteStatusJSON_UptimeSeconds(t *testing.T) {
 	}
 }
 
-// ─── Circuit breaker ──────────────────────────────────────────────────────────
-
-func TestDefaults_CircuitBreaker(t *testing.T) {
-	d := defaults()
-	if d.CircuitBreakerThreshold != 5 {
-		t.Errorf("CircuitBreakerThreshold = %d, want 5", d.CircuitBreakerThreshold)
-	}
-	if d.CircuitBreakerPauseMinutes != 30 {
-		t.Errorf("CircuitBreakerPauseMinutes = %d, want 30", d.CircuitBreakerPauseMinutes)
-	}
-}
-
-func TestConsecutiveErrors_ResetOnSuccess(t *testing.T) {
-	atomic.StoreInt64(&consecutiveErrors, 4)
-	atomic.StoreInt64(&consecutiveErrors, 0)
-	if got := atomic.LoadInt64(&consecutiveErrors); got != 0 {
-		t.Errorf("consecutiveErrors = %d, want 0", got)
-	}
-}
-
-func TestLoadConfig_CircuitBreaker(t *testing.T) {
-	p := cfgPath(t)
-	defer os.Remove(p)
-	if err := os.WriteFile(p, []byte(`{"circuit_breaker_threshold":3,"circuit_breaker_pause_minutes":15}`), 0644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	cfg := loadConfig()
-	if cfg.CircuitBreakerThreshold != 3 {
-		t.Errorf("CircuitBreakerThreshold = %d, want 3", cfg.CircuitBreakerThreshold)
-	}
-	if cfg.CircuitBreakerPauseMinutes != 15 {
-		t.Errorf("CircuitBreakerPauseMinutes = %d, want 15", cfg.CircuitBreakerPauseMinutes)
-	}
-}
-
 // ─── parseRebootPending() ─────────────────────────────────────────────────────
 
 func TestParseRebootPending(t *testing.T) {
@@ -975,7 +940,6 @@ func TestResetCounters(t *testing.T) {
 	atomic.StoreInt64(&updatesInstalled, 2)
 	atomic.StoreInt64(&updatesSkipped, 3)
 	atomic.StoreInt64(&cycleErrors, 1)
-	atomic.StoreInt64(&consecutiveErrors, 4)
 	lastInstalledMu.Lock()
 	lastInstalled = []installEntry{{KB: "KB1", Title: "T", InstalledAt: "2026-01-01T00:00:00Z"}}
 	lastInstalledMu.Unlock()
@@ -995,9 +959,6 @@ func TestResetCounters(t *testing.T) {
 
 	if atomic.LoadInt64(&updatesChecked) != 0 {
 		t.Error("updatesChecked should be 0")
-	}
-	if atomic.LoadInt64(&consecutiveErrors) != 0 {
-		t.Error("consecutiveErrors should be 0")
 	}
 	lastInstalledMu.Lock()
 	n2 := len(lastInstalled)
@@ -1576,46 +1537,6 @@ func TestRetryAttempts_ZeroFallback(t *testing.T) {
 	}
 }
 
-// ─── validateConfig CircuitBreakerResetMinutes ────────────────────────────────
-
-func TestValidateConfig_WithLogger_NegativeCircuitBreakerReset(t *testing.T) {
-	withTestLogger(t, func() {
-		c := defaults()
-		c.CircuitBreakerResetMinutes = -1
-		validateConfig(c) // must not panic
-	})
-}
-
-// ─── printShowConfig --json via os.Args ───────────────────────────────────────
-
-func TestPrintShowConfig_JSONFlag(t *testing.T) {
-	old := cfg
-	cfg = defaults()
-	defer func() { cfg = old }()
-
-	oldArgs := os.Args
-	os.Args = []string{"WinPiBooster.exe", "show-config", "--json"}
-	defer func() { os.Args = oldArgs }()
-
-	r, w, _ := os.Pipe()
-	oldOut := os.Stdout
-	os.Stdout = w
-	printShowConfig()
-	w.Close()
-	os.Stdout = oldOut
-
-	buf := make([]byte, 4096)
-	n, _ := r.Read(buf)
-	out := string(buf[:n])
-
-	var parsed Config
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &parsed); err != nil {
-		t.Errorf("output is not valid JSON: %v\nout=%q", err, out)
-	}
-	if parsed.CheckIntervalSeconds != 60 {
-		t.Errorf("CheckIntervalSeconds = %d, want 60", parsed.CheckIntervalSeconds)
-	}
-}
 
 // ─── cleanOldLogsVerbose: recent file not deleted ────────────────────────────
 
@@ -1721,7 +1642,6 @@ func TestShowConfigJSON_ContainsNewFields(t *testing.T) {
 	cfg = defaults()
 	cfg.HeartbeatIntervalMinutes = 30
 	cfg.RetryDelaySeconds = 3
-	cfg.CircuitBreakerResetMinutes = 10
 	defer func() { cfg = old }()
 
 	data, _ := json.MarshalIndent(cfg, "", "  ")
@@ -1729,7 +1649,6 @@ func TestShowConfigJSON_ContainsNewFields(t *testing.T) {
 	for _, key := range []string{
 		"heartbeat_interval_minutes",
 		"retry_delay_seconds",
-		"circuit_breaker_reset_minutes",
 	} {
 		if !strings.Contains(s, key) {
 			t.Errorf("JSON missing key %q", key)
@@ -1767,55 +1686,6 @@ func TestInstallStartFlag_Absent(t *testing.T) {
 	}
 }
 
-// ─── circuit_breaker_reset_minutes ────────────────────────────────────────────
-
-func TestDefaults_CircuitBreakerResetMinutes(t *testing.T) {
-	d := defaults()
-	if d.CircuitBreakerResetMinutes != 0 {
-		t.Errorf("CircuitBreakerResetMinutes default = %d, want 0", d.CircuitBreakerResetMinutes)
-	}
-}
-
-func TestLoadConfig_CircuitBreakerResetMinutes(t *testing.T) {
-	p := cfgPath(t)
-	defer os.Remove(p)
-	if err := os.WriteFile(p, []byte(`{"circuit_breaker_reset_minutes":15}`), 0644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	c := loadConfig()
-	if c.CircuitBreakerResetMinutes != 15 {
-		t.Errorf("CircuitBreakerResetMinutes = %d, want 15", c.CircuitBreakerResetMinutes)
-	}
-}
-
-func TestScheduleCircuitBreakerReset_Disabled(t *testing.T) {
-	old := cfg
-	cfg = defaults() // CircuitBreakerResetMinutes = 0
-	defer func() { cfg = old }()
-
-	// Must be a no-op — just verify no goroutine is launched (no panic)
-	scheduleCircuitBreakerReset()
-}
-
-func TestScheduleCircuitBreakerReset_ResetsCounter(t *testing.T) {
-	old := cfg
-	cfg = defaults()
-	cfg.CircuitBreakerResetMinutes = 1
-	defer func() { cfg = old }()
-
-	atomic.StoreInt64(&consecutiveErrors, 5)
-	defer atomic.StoreInt64(&consecutiveErrors, 0)
-
-	// Trigger reset manually (simulates what the ticker does)
-	prev := atomic.SwapInt64(&consecutiveErrors, 0)
-	if prev != 5 {
-		t.Errorf("expected prev=5, got %d", prev)
-	}
-	if atomic.LoadInt64(&consecutiveErrors) != 0 {
-		t.Errorf("consecutiveErrors should be 0 after reset")
-	}
-}
-
 // ─── withTestLogger helper ────────────────────────────────────────────────────
 
 // withTestLogger temporarily sets the global log to a discard logger, then restores it.
@@ -1840,8 +1710,6 @@ func TestValidateConfig_WithLogger_AllBranches(t *testing.T) {
 		c.MaxLogSizeMB = 0
 		c.PSTimeoutMinutes = 0
 		c.CmdTimeoutSeconds = 5
-		c.CircuitBreakerThreshold = 0
-		c.CircuitBreakerPauseMinutes = 0
 		c.LogLevel = "verbose"
 		c.MinFreeDiskMB = 50
 		c.HeartbeatIntervalMinutes = 2
