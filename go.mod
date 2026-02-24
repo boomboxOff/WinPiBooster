@@ -1,4 +1,4 @@
-module github.com/boomboxOff/WinPiBooster
+module github.com/boomboxoff/winpibooster
 
 go 1.24.0
 
