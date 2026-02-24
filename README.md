@@ -161,7 +161,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.16.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.17.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -222,5 +222,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.16.0" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.17.0" -o WinPiBooster.exe .
 ```
