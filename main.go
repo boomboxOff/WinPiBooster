@@ -255,7 +255,16 @@ func cleanOldLogs() {
 
 // cleanOldLogsVerbose removes log archives older than the retention period.
 // If verbose is true, prints a summary to stdout (used by the clean-logs command).
+// If dryRun is true, lists candidates without deleting (used by clean-logs --dry-run).
 func cleanOldLogsVerbose(verbose bool) {
+	cleanOldLogsInternal(verbose, false)
+}
+
+func cleanOldLogsDryRun() {
+	cleanOldLogsInternal(true, true)
+}
+
+func cleanOldLogsInternal(verbose, dryRun bool) {
 	days := cfg.LogRetentionDays
 	if days <= 0 {
 		days = 30
@@ -268,7 +277,10 @@ func cleanOldLogsVerbose(verbose bool) {
 		}
 		return
 	}
-	removed := 0
+	count := 0
+	if dryRun {
+		fmt.Printf("[DRY-RUN] Fichiers qui seraient supprimés (> %d jours) :\n", days)
+	}
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -282,6 +294,12 @@ func cleanOldLogsVerbose(verbose bool) {
 			continue
 		}
 		if info.ModTime().Before(cutoff) {
+			age := int(time.Since(info.ModTime()).Hours() / 24)
+			if dryRun {
+				fmt.Printf("  %s  (%d jours)\n", name, age)
+				count++
+				continue
+			}
 			fullPath := filepath.Join(logDir, name)
 			if err := os.Remove(fullPath); err != nil {
 				if log != nil {
@@ -291,12 +309,20 @@ func cleanOldLogsVerbose(verbose bool) {
 				if log != nil {
 					log.Debugf("Ancien journal supprimé : %s", name)
 				}
-				removed++
+				count++
 			}
 		}
 	}
+	if dryRun {
+		if count == 0 {
+			fmt.Println("Aucun fichier à supprimer.")
+		} else {
+			fmt.Printf("%d fichier(s) seraient supprimés.\n", count)
+		}
+		return
+	}
 	if verbose {
-		fmt.Printf("Suppression des archives de plus de %d jours...\n%d archive(s) supprimée(s).\n", days, removed)
+		fmt.Printf("Suppression des archives de plus de %d jours...\n%d archive(s) supprimée(s).\n", days, count)
 	}
 }
 
@@ -620,7 +646,17 @@ func main() {
 	case "status":
 		printExtendedStatus()
 	case "clean-logs":
-		cleanOldLogsVerbose(true)
+		dryRunFlag := false
+		for _, arg := range os.Args[2:] {
+			if arg == "--dry-run" {
+				dryRunFlag = true
+			}
+		}
+		if dryRunFlag {
+			cleanOldLogsDryRun()
+		} else {
+			cleanOldLogsVerbose(true)
+		}
 	case "list-logs":
 		listLogs()
 	case "tail":

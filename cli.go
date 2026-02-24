@@ -227,6 +227,7 @@ func historyLogs() {
 	files := append(archives, current)
 
 	total := 0
+	distinctKBs := make(map[string]bool)
 	for _, f := range files {
 		data, err := os.ReadFile(f)
 		if err != nil {
@@ -242,6 +243,16 @@ func historyLogs() {
 				}
 				fmt.Println(strings.TrimRight(line, "\r"))
 				total++
+				// Extract KB identifiers from the line (format: "KB5034441, KB5034442")
+				if idx := strings.Index(line, "Installation terminée :"); idx >= 0 {
+					kbPart := strings.TrimSpace(line[idx+len("Installation terminée :"):])
+					for _, kb := range strings.Split(kbPart, ",") {
+						kb = strings.TrimSpace(kb)
+						if kb != "" {
+							distinctKBs[kb] = true
+						}
+					}
+				}
 			}
 		}
 	}
@@ -252,7 +263,7 @@ func historyLogs() {
 			fmt.Println("Aucune installation enregistrée dans les logs.")
 		}
 	} else {
-		fmt.Printf("\nTotal : %d installation(s) enregistrée(s).\n", total)
+		fmt.Printf("\nTotal : %d installation(s) enregistrée(s). (%d KB distincts)\n", total, len(distinctKBs))
 	}
 }
 
@@ -314,6 +325,9 @@ func printExtendedStatus() {
 			fmt.Printf("  updates_installed  : %d\n", s.UpdatesInstalled)
 			fmt.Printf("  updates_skipped    : %d\n", s.UpdatesSkipped)
 			fmt.Printf("  cycle_errors       : %d\n", s.CycleErrors)
+			if s.LastError != "" {
+				fmt.Printf("  last_error         : %s\n", s.LastError)
+			}
 		}
 	} else {
 		fmt.Printf("\nDernière vérification (status.json) : absent\n")
@@ -322,6 +336,7 @@ func printExtendedStatus() {
 
 // printShowConfig displays the active configuration (loaded values or defaults).
 // If --json is in os.Args, outputs compact JSON instead of human-readable text.
+// If --diff is in os.Args, shows only values that differ from defaults.
 func printShowConfig() {
 	// --json flag: output raw JSON
 	for _, arg := range os.Args[2:] {
@@ -336,6 +351,49 @@ func printShowConfig() {
 		}
 	}
 
+	// --diff flag: show only values that differ from defaults
+	diffMode := false
+	for _, arg := range os.Args[2:] {
+		if arg == "--diff" {
+			diffMode = true
+		}
+	}
+
+	d := defaults()
+
+	type field struct {
+		name    string
+		val     string
+		isDefault bool
+	}
+	fields := []field{
+		{"check_interval_seconds     ", fmt.Sprintf("%d", cfg.CheckIntervalSeconds), cfg.CheckIntervalSeconds == d.CheckIntervalSeconds},
+		{"retry_attempts             ", fmt.Sprintf("%d", cfg.RetryAttempts), cfg.RetryAttempts == d.RetryAttempts},
+		{"log_retention_days         ", fmt.Sprintf("%d", cfg.LogRetentionDays), cfg.LogRetentionDays == d.LogRetentionDays},
+		{"max_log_size_mb            ", fmt.Sprintf("%d", cfg.MaxLogSizeMB), cfg.MaxLogSizeMB == d.MaxLogSizeMB},
+		{"ps_timeout_minutes         ", fmt.Sprintf("%d", cfg.PSTimeoutMinutes), cfg.PSTimeoutMinutes == d.PSTimeoutMinutes},
+		{"cmd_timeout_seconds        ", fmt.Sprintf("%d", cfg.CmdTimeoutSeconds), cfg.CmdTimeoutSeconds == d.CmdTimeoutSeconds},
+		{"log_level                  ", cfg.LogLevel, cfg.LogLevel == d.LogLevel},
+		{"notifications_enabled      ", fmt.Sprintf("%v", cfg.NotificationsOn()), cfg.NotificationsOn() == d.NotificationsOn()},
+		{"min_free_disk_mb           ", fmt.Sprintf("%d", cfg.MinFreeDiskMB), cfg.MinFreeDiskMB == d.MinFreeDiskMB},
+		{"heartbeat_interval_minutes ", fmt.Sprintf("%d", cfg.HeartbeatIntervalMinutes), cfg.HeartbeatIntervalMinutes == d.HeartbeatIntervalMinutes},
+		{"retry_delay_seconds        ", fmt.Sprintf("%d", cfg.RetryDelaySeconds), cfg.RetryDelaySeconds == d.RetryDelaySeconds},
+	}
+
+	if diffMode {
+		changed := 0
+		for _, f := range fields {
+			if !f.isDefault {
+				fmt.Printf("  %s: %s\n", f.name, f.val)
+				changed++
+			}
+		}
+		if changed == 0 {
+			fmt.Println("Aucune valeur surchargée — configuration identique aux défauts.")
+		}
+		return
+	}
+
 	exePath, _ := os.Executable()
 	cfgPath := filepath.Join(filepath.Dir(exePath), "config.json")
 	_, err := os.Stat(cfgPath)
@@ -345,24 +403,15 @@ func printShowConfig() {
 		fmt.Println("Aucun config.json trouvé — valeurs par défaut utilisées.")
 		fmt.Println()
 	}
-	d := defaults()
-	mark := func(same bool) string {
-		if same {
+	mark := func(isDefault bool) string {
+		if isDefault {
 			return "  (défaut)"
 		}
 		return ""
 	}
-	fmt.Printf("  check_interval_seconds          : %d%s\n", cfg.CheckIntervalSeconds, mark(cfg.CheckIntervalSeconds == d.CheckIntervalSeconds))
-	fmt.Printf("  retry_attempts                  : %d%s\n", cfg.RetryAttempts, mark(cfg.RetryAttempts == d.RetryAttempts))
-	fmt.Printf("  log_retention_days              : %d%s\n", cfg.LogRetentionDays, mark(cfg.LogRetentionDays == d.LogRetentionDays))
-	fmt.Printf("  max_log_size_mb                 : %d%s\n", cfg.MaxLogSizeMB, mark(cfg.MaxLogSizeMB == d.MaxLogSizeMB))
-	fmt.Printf("  ps_timeout_minutes              : %d%s\n", cfg.PSTimeoutMinutes, mark(cfg.PSTimeoutMinutes == d.PSTimeoutMinutes))
-	fmt.Printf("  cmd_timeout_seconds             : %d%s\n", cfg.CmdTimeoutSeconds, mark(cfg.CmdTimeoutSeconds == d.CmdTimeoutSeconds))
-	fmt.Printf("  log_level                       : %s%s\n", cfg.LogLevel, mark(cfg.LogLevel == d.LogLevel))
-	fmt.Printf("  notifications_enabled           : %v%s\n", cfg.NotificationsOn(), mark(cfg.NotificationsOn() == d.NotificationsOn()))
-	fmt.Printf("  min_free_disk_mb                : %d%s\n", cfg.MinFreeDiskMB, mark(cfg.MinFreeDiskMB == d.MinFreeDiskMB))
-	fmt.Printf("  heartbeat_interval_minutes      : %d%s\n", cfg.HeartbeatIntervalMinutes, mark(cfg.HeartbeatIntervalMinutes == d.HeartbeatIntervalMinutes))
-	fmt.Printf("  retry_delay_seconds             : %d%s\n", cfg.RetryDelaySeconds, mark(cfg.RetryDelaySeconds == d.RetryDelaySeconds))
+	for _, f := range fields {
+		fmt.Printf("  %s: %s%s\n", f.name, f.val, mark(f.isDefault))
+	}
 }
 
 // exportConfig writes the active configuration to config.json in the executable directory.
@@ -414,13 +463,26 @@ func resetCounters() {
 }
 
 // printReport prints the current counters without resetting them.
+// If status.json is present, also shows uptime.
 func printReport() {
 	checked := atomic.LoadInt64(&updatesChecked)
 	installed := atomic.LoadInt64(&updatesInstalled)
 	skipped := atomic.LoadInt64(&updatesSkipped)
 	errors := atomic.LoadInt64(&cycleErrors)
-	fmt.Printf("Rapport courant (%s) :\n- Vérifications totales   : %d\n- Mises à jour installées : %d\n- Sans mise à jour        : %d\n- Erreurs                 : %d\n",
-		time.Now().Format("2006-01-02 15:04:05"), checked, installed, skipped, errors)
+	fmt.Printf("Rapport courant (%s) :\n", time.Now().Format("2006-01-02 15:04:05"))
+
+	statusPath := filepath.Join(logDir, "status.json")
+	if data, err := os.ReadFile(statusPath); err == nil {
+		var s statusJSON
+		if json.Unmarshal(data, &s) == nil && s.UptimeSeconds > 0 {
+			fmt.Printf("- Uptime                  : %s\n", formatUptime(time.Duration(s.UptimeSeconds)*time.Second))
+		}
+	}
+
+	fmt.Printf("- Vérifications totales   : %d\n", checked)
+	fmt.Printf("- Mises à jour installées : %d\n", installed)
+	fmt.Printf("- Sans mise à jour        : %d\n", skipped)
+	fmt.Printf("- Erreurs                 : %d\n", errors)
 }
 
 func printHelp() {

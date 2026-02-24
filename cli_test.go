@@ -1099,3 +1099,293 @@ func TestPrintShowConfig_NonDefaultNoMarker(t *testing.T) {
 		t.Errorf("expected other fields to have '(défaut)' marker, got: %q", out)
 	}
 }
+
+// ─── printExtendedStatus last_error (#114) ────────────────────────────────────
+
+func TestPrintExtendedStatus_LastError(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	s := statusJSON{
+		Version:   "dev",
+		LastCheck: time.Now().UTC().Format(time.RFC3339),
+		LastError: "execPS: exit status 1: Access denied",
+	}
+	data, _ := json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "last_error") {
+		t.Errorf("expected 'last_error' in output when non-empty, got: %q", out)
+	}
+	if !strings.Contains(out, "Access denied") {
+		t.Errorf("expected error message in output, got: %q", out)
+	}
+}
+
+func TestPrintExtendedStatus_NoLastError(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	s := statusJSON{
+		Version:   "dev",
+		LastCheck: time.Now().UTC().Format(time.RFC3339),
+		LastError: "", // empty — must not appear
+	}
+	data, _ := json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if strings.Contains(out, "last_error") {
+		t.Errorf("'last_error' should not appear when empty, got: %q", out)
+	}
+}
+
+// ─── show-config --diff (#115) ───────────────────────────────────────────────
+
+func TestPrintShowConfig_DiffMode_NoChanges(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "show-config", "--diff"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 2048)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "identique aux défauts") {
+		t.Errorf("expected 'identique aux défauts' when no changes, got: %q", out)
+	}
+}
+
+func TestPrintShowConfig_DiffMode_WithChange(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.CheckIntervalSeconds = 120
+	defer func() { cfg = old }()
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "show-config", "--diff"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 2048)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "check_interval_seconds") {
+		t.Errorf("expected changed field in diff output, got: %q", out)
+	}
+	if strings.Contains(out, "retry_attempts") {
+		t.Errorf("unchanged field should not appear in diff, got: %q", out)
+	}
+}
+
+// ─── clean-logs --dry-run (#116) ──────────────────────────────────────────────
+
+func TestCleanOldLogsDryRun_NoFiles(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	cleanOldLogsDryRun()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 512)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "Aucun fichier") {
+		t.Errorf("expected 'Aucun fichier' when no expired archives, got: %q", out)
+	}
+}
+
+func TestCleanOldLogsDryRun_ExpiredFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Create an archive with an old mod time
+	archivePath := filepath.Join(dir, "UpdateLog_2025-01-01T00-00-00.txt")
+	if err := os.WriteFile(archivePath, []byte("old log"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().AddDate(0, 0, -60)
+	if err := os.Chtimes(archivePath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	cleanOldLogsDryRun()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	// File must still exist (dry run)
+	if _, err := os.Stat(archivePath); os.IsNotExist(err) {
+		t.Error("dry-run should not delete files")
+	}
+	if !strings.Contains(out, "UpdateLog_2025-01-01") {
+		t.Errorf("expected expired file listed in dry-run output, got: %q", out)
+	}
+}
+
+// ─── printReport uptime (#117) ────────────────────────────────────────────────
+
+func TestPrintReport_WithUptime(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Write status.json with uptime_seconds
+	s := statusJSON{UptimeSeconds: 7530} // 2h 5m 30s
+	data, _ := json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printReport()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "Uptime") {
+		t.Errorf("expected 'Uptime' in report output when status.json present, got: %q", out)
+	}
+}
+
+func TestPrintReport_NoStatusJSON(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// No status.json — uptime line must be absent, no panic
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printReport()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if strings.Contains(out, "Uptime") {
+		t.Errorf("'Uptime' should not appear when status.json absent, got: %q", out)
+	}
+	if !strings.Contains(out, "Vérifications") {
+		t.Errorf("expected counter lines even without status.json, got: %q", out)
+	}
+}
+
+// ─── historyLogs KB distincts (#118) ─────────────────────────────────────────
+
+func TestHistoryLogs_DistinctKBs(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// 3 lines but only 3 distinct KBs (KB1111 appears twice)
+	content := "2026-02-24 10:00:00 [INFO]: Installation terminée : KB1111, KB2222\n" +
+		"2026-02-24 11:00:00 [INFO]: Installation terminée : KB1111, KB3333\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "3 KB distincts") {
+		t.Errorf("expected '3 KB distincts' (KB1111, KB2222, KB3333), got: %q", out)
+	}
+	if !strings.Contains(out, "Total : 2 installation(s)") {
+		t.Errorf("expected total=2, got: %q", out)
+	}
+}
