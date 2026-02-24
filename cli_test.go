@@ -1389,3 +1389,248 @@ func TestHistoryLogs_DistinctKBs(t *testing.T) {
 		t.Errorf("expected total=2, got: %q", out)
 	}
 }
+
+// ─── tail --grep (#119) ───────────────────────────────────────────────────────
+
+func TestTailLogs_GrepMatch(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	content := "2026-02-24 10:00:00 [INFO]: Heartbeat\n" +
+		"2026-02-24 10:01:00 [ERROR]: execPS failed\n" +
+		"2026-02-24 10:02:00 [INFO]: Cycle OK\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "tail", "--grep", "error"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	tailLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 2048)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "ERROR") {
+		t.Errorf("expected ERROR line in output, got: %q", out)
+	}
+	if strings.Contains(out, "Heartbeat") {
+		t.Errorf("Heartbeat should be filtered out, got: %q", out)
+	}
+}
+
+func TestTailLogs_GrepNoMatch(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("2026-02-24 [INFO]: all good\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "tail", "--grep", "ERROR"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	tailLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 512)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "Aucune ligne") {
+		t.Errorf("expected 'Aucune ligne' message, got: %q", out)
+	}
+}
+
+// ─── history --last N (#120) ──────────────────────────────────────────────────
+
+func TestHistoryLogs_LastN(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	content := "2026-02-24 10:00:00 [INFO]: Installation terminée : KB1111\n" +
+		"2026-02-24 11:00:00 [INFO]: Installation terminée : KB2222\n" +
+		"2026-02-24 12:00:00 [INFO]: Installation terminée : KB3333\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "history", "--last", "2"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if strings.Contains(out, "KB1111") {
+		t.Errorf("KB1111 should be excluded by --last 2, got: %q", out)
+	}
+	if !strings.Contains(out, "KB2222") {
+		t.Errorf("KB2222 should be included, got: %q", out)
+	}
+	if !strings.Contains(out, "KB3333") {
+		t.Errorf("KB3333 should be included, got: %q", out)
+	}
+}
+
+// ─── clean-logs taille libérée (#121) ────────────────────────────────────────
+
+func TestCleanOldLogsDryRun_ShowsSize(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	archivePath := filepath.Join(dir, "UpdateLog_2025-01-01T00-00-00.txt")
+	if err := os.WriteFile(archivePath, []byte("old log content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().AddDate(0, 0, -60)
+	if err := os.Chtimes(archivePath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	cleanOldLogsDryRun()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "MB") {
+		t.Errorf("expected size in MB in dry-run output, got: %q", out)
+	}
+}
+
+func TestCleanOldLogsVerbose_ShowsSize(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	archivePath := filepath.Join(dir, "UpdateLog_2025-01-01T00-00-00.txt")
+	if err := os.WriteFile(archivePath, []byte("old log content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().AddDate(0, 0, -60)
+	if err := os.Chtimes(archivePath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	cleanOldLogsVerbose(true)
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 1024)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "MB") {
+		t.Errorf("expected size in MB in verbose output, got: %q", out)
+	}
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Error("expected archive to be deleted in verbose mode")
+	}
+}
+
+// ─── diagnose seuil disque (#122) ────────────────────────────────────────────
+
+func TestRunDiagnose_ShowsDiskThreshold(t *testing.T) {
+	oldCfg := cfg
+	cfg = defaults()
+	cfg.MinFreeDiskMB = 500
+	defer func() { cfg = oldCfg }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	withTestLogger(t, func() {
+		runDiagnose()
+	})
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "seuil") {
+		t.Errorf("expected 'seuil' in disk check output, got: %q", out)
+	}
+	if !strings.Contains(out, "500") {
+		t.Errorf("expected threshold value '500' in output, got: %q", out)
+	}
+}
+
+// ─── status version en-tête (#123) ───────────────────────────────────────────
+
+func TestPrintExtendedStatus_Version(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	s := statusJSON{
+		Version:   "v2.19.0",
+		LastCheck: time.Now().UTC().Format(time.RFC3339),
+	}
+	data, _ := json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "v2.19.0") {
+		t.Errorf("expected version 'v2.19.0' in status output, got: %q", out)
+	}
+}

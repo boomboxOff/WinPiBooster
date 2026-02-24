@@ -84,7 +84,11 @@ func runDiagnose() bool {
 	check("Service Windows Update (wuauserv)", wuRunning, wuDetail)
 
 	free := freeDiskMB()
-	check("Espace disque libre (C:)", free >= 500, fmt.Sprintf("%d MB disponibles", free))
+	threshold := int64(cfg.MinFreeDiskMB)
+	if threshold <= 0 {
+		threshold = 500
+	}
+	check("Espace disque libre (C:)", free >= threshold, fmt.Sprintf("%d MB disponibles (seuil : %d MB)", free, threshold))
 
 	fmt.Println()
 	if allOK {
@@ -170,15 +174,21 @@ func listLogs() {
 }
 
 // tailLogs prints the last N lines of UpdateLog.txt (default 20).
-// Supports --lines N anywhere in os.Args.
+// Supports --lines N and --grep PATTERN anywhere in os.Args.
+// When --grep is set, only matching lines are considered (case-insensitive),
+// then --lines N is applied to limit the output.
 func tailLogs() {
 	n := 20
+	grepPattern := ""
 	args := os.Args[1:]
 	for i, arg := range args {
 		if arg == "--lines" && i+1 < len(args) {
 			if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
 				n = v
 			}
+		}
+		if arg == "--grep" && i+1 < len(args) {
+			grepPattern = args[i+1]
 		}
 	}
 
@@ -190,6 +200,22 @@ func tailLogs() {
 	}
 
 	lines := strings.Split(strings.TrimRight(string(data), "\r\n"), "\n")
+
+	if grepPattern != "" {
+		pattern := strings.ToLower(grepPattern)
+		filtered := lines[:0]
+		for _, l := range lines {
+			if strings.Contains(strings.ToLower(l), pattern) {
+				filtered = append(filtered, l)
+			}
+		}
+		lines = filtered
+		if len(lines) == 0 {
+			fmt.Printf("Aucune ligne ne correspond au pattern %q.\n", grepPattern)
+			return
+		}
+	}
+
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
@@ -198,11 +224,12 @@ func tailLogs() {
 
 // historyLogs scans all log files (current + archives) and prints every
 // "Installation terminée" line in chronological order.
-// Supports --since YYYY-MM-DD to filter entries from a given date (inclusive).
+// Supports --since YYYY-MM-DD and --last N flags.
 func historyLogs() {
-	// Parse --since YYYY-MM-DD from os.Args
-	sinceStr := ""
 	args := os.Args[1:]
+
+	// Parse --since YYYY-MM-DD
+	sinceStr := ""
 	for i, arg := range args {
 		if arg == "--since" && i+1 < len(args) {
 			sinceStr = args[i+1]
@@ -213,9 +240,19 @@ func historyLogs() {
 		t, err := time.Parse("2006-01-02", sinceStr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Format --since invalide : %q (attendu YYYY-MM-DD)\n", sinceStr)
-			sinceStr = "" // ignore invalid date, show all
+			sinceStr = ""
 		} else {
 			sinceTime = t
+		}
+	}
+
+	// Parse --last N
+	lastN := 0
+	for i, arg := range args {
+		if arg == "--last" && i+1 < len(args) {
+			if v, err := strconv.Atoi(args[i+1]); err == nil && v > 0 {
+				lastN = v
+			}
 		}
 	}
 
@@ -226,7 +263,8 @@ func historyLogs() {
 	sort.Strings(archives)
 	files := append(archives, current)
 
-	total := 0
+	// Collect all matching lines first
+	var matchedLines []string
 	distinctKBs := make(map[string]bool)
 	for _, f := range files {
 		data, err := os.ReadFile(f)
@@ -241,9 +279,7 @@ func historyLogs() {
 						continue
 					}
 				}
-				fmt.Println(strings.TrimRight(line, "\r"))
-				total++
-				// Extract KB identifiers from the line (format: "KB5034441, KB5034442")
+				matchedLines = append(matchedLines, strings.TrimRight(line, "\r"))
 				if idx := strings.Index(line, "Installation terminée :"); idx >= 0 {
 					kbPart := strings.TrimSpace(line[idx+len("Installation terminée :"):])
 					for _, kb := range strings.Split(kbPart, ",") {
@@ -256,15 +292,24 @@ func historyLogs() {
 			}
 		}
 	}
-	if total == 0 {
+
+	// Apply --last N
+	if lastN > 0 && len(matchedLines) > lastN {
+		matchedLines = matchedLines[len(matchedLines)-lastN:]
+	}
+
+	if len(matchedLines) == 0 {
 		if sinceStr != "" {
 			fmt.Printf("Aucune installation enregistrée depuis le %s.\n", sinceStr)
 		} else {
 			fmt.Println("Aucune installation enregistrée dans les logs.")
 		}
-	} else {
-		fmt.Printf("\nTotal : %d installation(s) enregistrée(s). (%d KB distincts)\n", total, len(distinctKBs))
+		return
 	}
+	for _, l := range matchedLines {
+		fmt.Println(l)
+	}
+	fmt.Printf("\nTotal : %d installation(s) enregistrée(s). (%d KB distincts)\n", len(matchedLines), len(distinctKBs))
 }
 
 // openLogs opens UpdateLog.txt in Notepad.
@@ -308,6 +353,9 @@ func printExtendedStatus() {
 		var s statusJSON
 		if json.Unmarshal(data, &s) == nil {
 			fmt.Printf("\nDernière vérification (status.json) :\n")
+			if s.Version != "" {
+				fmt.Printf("  version            : %s\n", s.Version)
+			}
 			fmt.Printf("  last_check         : %s\n", s.LastCheck)
 			if s.NextCheck != "" {
 				if nextT, err2 := time.Parse(time.RFC3339, s.NextCheck); err2 == nil {

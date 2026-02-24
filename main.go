@@ -278,6 +278,7 @@ func cleanOldLogsInternal(verbose, dryRun bool) {
 		return
 	}
 	count := 0
+	var totalBytes int64
 	if dryRun {
 		fmt.Printf("[DRY-RUN] Fichiers qui seraient supprimés (> %d jours) :\n", days)
 	}
@@ -298,6 +299,7 @@ func cleanOldLogsInternal(verbose, dryRun bool) {
 			if dryRun {
 				fmt.Printf("  %s  (%d jours)\n", name, age)
 				count++
+				totalBytes += info.Size()
 				continue
 			}
 			fullPath := filepath.Join(logDir, name)
@@ -310,6 +312,7 @@ func cleanOldLogsInternal(verbose, dryRun bool) {
 					log.Debugf("Ancien journal supprimé : %s", name)
 				}
 				count++
+				totalBytes += info.Size()
 			}
 		}
 	}
@@ -317,12 +320,16 @@ func cleanOldLogsInternal(verbose, dryRun bool) {
 		if count == 0 {
 			fmt.Println("Aucun fichier à supprimer.")
 		} else {
-			fmt.Printf("%d fichier(s) seraient supprimés.\n", count)
+			fmt.Printf("%d fichier(s) seraient supprimés — %.1f MB libérés.\n", count, float64(totalBytes)/(1024.0*1024.0))
 		}
 		return
 	}
 	if verbose {
-		fmt.Printf("Suppression des archives de plus de %d jours...\n%d archive(s) supprimée(s).\n", days, count)
+		fmt.Printf("Suppression des archives de plus de %d jours...\n%d archive(s) supprimée(s)", days, count)
+		if count > 0 {
+			fmt.Printf(" — %.1f MB libérés", float64(totalBytes)/(1024.0*1024.0))
+		}
+		fmt.Println(".")
 	}
 }
 
