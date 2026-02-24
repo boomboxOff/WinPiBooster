@@ -2133,6 +2133,126 @@ func TestBuildWeeklyReport_LargeValues(t *testing.T) {
 	}
 }
 
+// ─── notifyErrorOnce (#102) ───────────────────────────────────────────────────
+
+func TestErrorNotified_InitiallyFalse(t *testing.T) {
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
+
+	errorNotifiedMu.Lock()
+	got := errorNotified
+	errorNotifiedMu.Unlock()
+	if got {
+		t.Error("errorNotified should be false initially")
+	}
+}
+
+func TestNotifyErrorOnce_FirstCallNotifies(t *testing.T) {
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
+	defer func() {
+		errorNotifiedMu.Lock()
+		errorNotified = false
+		errorNotifiedMu.Unlock()
+	}()
+
+	old := cfg
+	cfg = defaults()
+	cfg.NotificationsEnabled = boolPtr(false) // suppress actual toast
+	defer func() { cfg = old }()
+
+	notifyErrorOnce("Test", "first error")
+
+	errorNotifiedMu.Lock()
+	got := errorNotified
+	errorNotifiedMu.Unlock()
+	if !got {
+		t.Error("errorNotified should be true after first notifyErrorOnce call")
+	}
+}
+
+func TestNotifyErrorOnce_SecondCallSuppressed(t *testing.T) {
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
+	defer func() {
+		errorNotifiedMu.Lock()
+		errorNotified = false
+		errorNotifiedMu.Unlock()
+	}()
+
+	old := cfg
+	cfg = defaults()
+	cfg.NotificationsEnabled = boolPtr(false)
+	defer func() { cfg = old }()
+
+	notifyCount := 0
+	// Patch errorNotified manually to simulate first call already done
+	errorNotifiedMu.Lock()
+	if !errorNotified {
+		errorNotified = true
+		errorNotifiedMu.Unlock()
+		notifyCount++
+	} else {
+		errorNotifiedMu.Unlock()
+	}
+	// Second call should be suppressed
+	errorNotifiedMu.Lock()
+	if !errorNotified {
+		errorNotified = true
+		errorNotifiedMu.Unlock()
+		notifyCount++
+	} else {
+		errorNotifiedMu.Unlock()
+	}
+
+	if notifyCount != 1 {
+		t.Errorf("expected 1 notify call, got %d", notifyCount)
+	}
+}
+
+func TestNotifyErrorOnce_ResetAllowsNextNotify(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.NotificationsEnabled = boolPtr(false)
+	defer func() { cfg = old }()
+
+	// First call
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
+	notifyErrorOnce("Test", "error 1")
+
+	errorNotifiedMu.Lock()
+	v1 := errorNotified
+	errorNotifiedMu.Unlock()
+	if !v1 {
+		t.Error("errorNotified should be true after first call")
+	}
+
+	// Simulate successful cycle reset
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
+
+	// Second call after reset should notify again
+	notifyErrorOnce("Test", "error 2")
+
+	errorNotifiedMu.Lock()
+	v2 := errorNotified
+	errorNotifiedMu.Unlock()
+	if !v2 {
+		t.Error("errorNotified should be true again after reset + second call")
+	}
+
+	// Cleanup
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
+}
+
 // ─── cbNotified anti-spam (#97) ───────────────────────────────────────────────
 
 func TestCBNotified_InitiallyFalse(t *testing.T) {

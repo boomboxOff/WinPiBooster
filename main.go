@@ -70,6 +70,10 @@ var (
 	cbNotified   bool
 	cbNotifiedMu sync.Mutex
 
+	// Anti-spam flag: error notification sent once per incident, reset on success
+	errorNotified   bool
+	errorNotifiedMu sync.Mutex
+
 	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
 	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 )
@@ -183,6 +187,19 @@ func showNotification(title, message string) {
 	}
 }
 
+// notifyErrorOnce sends an error notification only once per incident.
+// Subsequent calls are suppressed until errorNotified is reset by a successful cycle.
+func notifyErrorOnce(title, msg string) {
+	errorNotifiedMu.Lock()
+	if !errorNotified {
+		errorNotified = true
+		errorNotifiedMu.Unlock()
+		showNotification(title, msg)
+	} else {
+		errorNotifiedMu.Unlock()
+	}
+}
+
 // testNotify sends a test toast notification and prints a confirmation.
 func testNotify() {
 	showNotification("WinPiBooster — Test", "Les notifications fonctionnent correctement.")
@@ -231,13 +248,11 @@ func installPSWindowsUpdateModule() error {
 	result, err := execPS("Install-Module -Name PSWindowsUpdate -Force -SkipPublisherCheck -Confirm:$false -AllowClobber")
 	if err != nil {
 		log.Errorf("Erreur lors de l'installation du module PSWindowsUpdate : %v", err)
-		showNotification("Erreur", "Erreur lors de l'installation du module PSWindowsUpdate.")
 		return err
 	}
 	if strings.Contains(strings.ToLower(result), "error") {
 		msg := "Erreur détectée pendant l'installation : Conflit potentiel avec les politiques de sécurité ou les permissions administratives."
 		log.Error(msg)
-		showNotification("Erreur", "Installation du module PSWindowsUpdate échouée.")
 		return fmt.Errorf("%s", msg)
 	}
 
@@ -778,7 +793,7 @@ func runCycle() {
 		atomic.AddInt64(&cycleErrors, 1)
 		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
-		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
+		notifyErrorOnce("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
@@ -786,7 +801,7 @@ func runCycle() {
 		atomic.AddInt64(&cycleErrors, 1)
 		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
-		showNotification("Erreur", "Erreur globale du processus de mise à jour.")
+		notifyErrorOnce("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
@@ -816,7 +831,7 @@ func runCycle() {
 			if free := freeDiskMB(); free < min {
 				msg := fmt.Sprintf("Espace disque insuffisant (%d MB libres, minimum %d MB) — installation ignorée.", free, min)
 				log.Warn(msg)
-				showNotification("Espace disque insuffisant", msg)
+				notifyErrorOnce("Espace disque insuffisant", msg)
 				atomic.AddInt64(&updatesSkipped, int64(len(updates)))
 				return
 			}
@@ -828,13 +843,16 @@ func runCycle() {
 			atomic.AddInt64(&cycleErrors, 1)
 			atomic.AddInt64(&consecutiveErrors, 1)
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
-			showNotification("Erreur", "Erreur globale du processus de mise à jour.")
+			notifyErrorOnce("Erreur", "Erreur globale du processus de mise à jour.")
 			return
 		}
 	}
 
-	// Successful cycle — reset consecutive error counter.
+	// Successful cycle — reset counters and notification flags.
 	atomic.StoreInt64(&consecutiveErrors, 0)
+	errorNotifiedMu.Lock()
+	errorNotified = false
+	errorNotifiedMu.Unlock()
 	writeStatusJSON()
 	log.Debug("Processus terminé.")
 }
