@@ -8,11 +8,9 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 
 - Vérifie toutes les **60 secondes** si des mises à jour Windows sont disponibles
 - Installe automatiquement les mises à jour détectées avec redémarrage automatique si nécessaire
-- Envoie des **notifications Windows toast** à chaque événement clé (démarrage, arrêt, installation, erreur, rapport)
+- Envoie une **notification Windows toast** lors de l'installation de mises à jour ou en cas d'erreur fatale
 - Génère un **rapport quotidien à minuit** avec archivage du log et remise à zéro des compteurs
 - Génère un **rapport hebdomadaire chaque dimanche à minuit** avec les totaux de la semaine
-- Notification toast unique quand un **redémarrage est en attente** (anti-spam : une seule fois par session)
-- Notification toast unique quand le **circuit breaker se déclenche** (anti-spam : une notification par activation)
 - **Auto-reset du circuit breaker** après N minutes sans erreur (configurable, désactivé par défaut)
 - Archive les logs à chaque lancement, à minuit et lors d'un dépassement de taille (**10 MB** par défaut)
 - Supprime les archives de plus de **30 jours** automatiquement
@@ -169,7 +167,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.14.2 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.14.3 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -194,7 +192,7 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.14.2",
+  "version": "v2.14.3",
   "last_check": "2026-02-24T10:15:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
@@ -229,5 +227,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.14.2" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.14.3" -o WinPiBooster.exe .
 ```
