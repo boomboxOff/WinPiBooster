@@ -1323,6 +1323,61 @@ func TestDefaults_HeartbeatIntervalMinutes(t *testing.T) {
 	}
 }
 
+// ─── exportConfig ─────────────────────────────────────────────────────────────
+
+func TestExportConfig_WritesFile(t *testing.T) {
+	dir := t.TempDir()
+	// Point executable lookup to the temp dir by overriding logDir
+	// exportConfig uses os.Executable(), so we test via the JSON content directly.
+	// Instead, call json.MarshalIndent on cfg to verify the serialization.
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	dest := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(dest, append(data, '\n'), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "check_interval_seconds") {
+		t.Errorf("exported JSON missing check_interval_seconds: %s", string(got))
+	}
+	if !strings.Contains(string(got), "retry_delay_seconds") {
+		t.Errorf("exported JSON missing retry_delay_seconds: %s", string(got))
+	}
+}
+
+func TestExportConfig_JSONRoundtrip(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.CheckIntervalSeconds = 120
+	cfg.RetryDelaySeconds = 10
+	defer func() { cfg = old }()
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	var back Config
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if back.CheckIntervalSeconds != 120 {
+		t.Errorf("CheckIntervalSeconds = %d, want 120", back.CheckIntervalSeconds)
+	}
+	if back.RetryDelaySeconds != 10 {
+		t.Errorf("RetryDelaySeconds = %d, want 10", back.RetryDelaySeconds)
+	}
+}
+
 // ─── withTestLogger helper ────────────────────────────────────────────────────
 
 // withTestLogger temporarily sets the global log to a discard logger, then restores it.

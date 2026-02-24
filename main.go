@@ -1110,6 +1110,41 @@ func printShowConfig() {
 	fmt.Printf("  log_level                    : %s\n", cfg.LogLevel)
 }
 
+// exportConfig writes the active configuration to config.json in the executable directory.
+// If the file already exists, --force is required to overwrite it.
+func exportConfig() {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erreur : impossible de localiser l'exécutable : %v\n", err)
+		os.Exit(1)
+	}
+	cfgPath := filepath.Join(filepath.Dir(exePath), "config.json")
+
+	// Check --force flag
+	force := false
+	for _, arg := range os.Args[2:] {
+		if arg == "--force" {
+			force = true
+		}
+	}
+
+	if _, err := os.Stat(cfgPath); err == nil && !force {
+		fmt.Fprintf(os.Stderr, "config.json existe déjà. Utilisez --force pour écraser : export-config --force\n")
+		os.Exit(1)
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Erreur de sérialisation : %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(cfgPath, append(data, '\n'), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Erreur d'écriture : %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Configuration exportée vers : %s\n", cfgPath)
+}
+
 // resetCounters zeroes all atomic counters, clears the install history, and rewrites status.json.
 func resetCounters() {
 	atomic.StoreInt64(&updatesChecked, 0)
@@ -1154,6 +1189,8 @@ Usage:
   WinPiBooster.exe test-notify       Envoie une notification toast de test
   WinPiBooster.exe reset-counters    Remet les compteurs à zéro et réécrit status.json
   WinPiBooster.exe show-config       Affiche la configuration active
+  WinPiBooster.exe show-config --json  Affiche la configuration au format JSON
+  WinPiBooster.exe export-config    Écrit config.json depuis la configuration active (--force pour écraser)
   WinPiBooster.exe diagnose          Vérifie les prérequis et affiche un rapport de santé
   WinPiBooster.exe version           Affiche la version
   WinPiBooster.exe --version         Alias Unix pour version
@@ -1259,6 +1296,8 @@ func main() {
 		resetCounters()
 	case "show-config":
 		printShowConfig()
+	case "export-config":
+		exportConfig()
 	case "diagnose":
 		if !runDiagnose() {
 			os.Exit(1)
