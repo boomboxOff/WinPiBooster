@@ -62,18 +62,6 @@ var (
 	psModuleReady bool
 	psModuleMu    sync.Mutex
 
-	// Anti-spam flag: reboot-pending notification sent once per session
-	rebootNotified   bool
-	rebootNotifiedMu sync.Mutex
-
-	// Anti-spam flag: circuit breaker notification sent once per CB activation
-	cbNotified   bool
-	cbNotifiedMu sync.Mutex
-
-	// Anti-spam flag: error notification sent once per incident, reset on success
-	errorNotified   bool
-	errorNotifiedMu sync.Mutex
-
 	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
 	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 )
@@ -213,19 +201,6 @@ func showNotification(title, message string) {
 	}
 }
 
-// notifyErrorOnce sends an error notification only once per incident.
-// Subsequent calls are suppressed until errorNotified is reset by a successful cycle.
-func notifyErrorOnce(title, msg string) {
-	errorNotifiedMu.Lock()
-	if !errorNotified {
-		errorNotified = true
-		errorNotifiedMu.Unlock()
-		showNotification(title, msg)
-	} else {
-		errorNotifiedMu.Unlock()
-	}
-}
-
 // testNotify sends a test toast notification and prints a confirmation.
 func testNotify() {
 	showNotification("WinPiBooster — Test", "Les notifications fonctionnent correctement.")
@@ -283,7 +258,6 @@ func installPSWindowsUpdateModule() error {
 	}
 
 	log.Info("Module PSWindowsUpdate installé avec succès.")
-	showNotification("Succès", "Module PSWindowsUpdate installé.")
 	psModuleReady = true
 	return nil
 }
@@ -528,7 +502,6 @@ func generateDailyReport() {
 	if log != nil {
 		log.Info(report)
 	}
-	showNotification("Rapport quotidien", report)
 }
 
 // buildWeeklyReport formats the weekly report string.
@@ -549,7 +522,6 @@ func generateWeeklyReport() {
 	if log != nil {
 		log.Info(report)
 	}
-	showNotification("Rapport hebdomadaire", report)
 }
 
 // durationUntilNextSunday returns the duration until the next Sunday midnight.
@@ -790,27 +762,13 @@ func runCycle() {
 	threshold := int64(cfg.CircuitBreakerThreshold)
 	if threshold > 0 && atomic.LoadInt64(&consecutiveErrors) >= threshold {
 		pause := time.Duration(cfg.CircuitBreakerPauseMinutes) * time.Minute
-		msg := fmt.Sprintf("Circuit ouvert (%d erreurs consécutives) — pause de %v avant le prochain cycle.", threshold, pause)
-		log.Warn(msg)
-		// Anti-spam: notify only on first trigger of each CB activation.
-		cbNotifiedMu.Lock()
-		if !cbNotified {
-			cbNotified = true
-			cbNotifiedMu.Unlock()
-			showNotification("Circuit ouvert", msg)
-		} else {
-			cbNotifiedMu.Unlock()
-		}
+		log.Warnf("Circuit ouvert (%d erreurs consécutives) — pause de %v avant le prochain cycle.", threshold, pause)
 		select {
 		case <-time.After(pause):
 		case <-shutdownCtx.Done():
 			return
 		}
 		atomic.StoreInt64(&consecutiveErrors, 0)
-		// Reset flag so the next CB activation can notify again.
-		cbNotifiedMu.Lock()
-		cbNotified = false
-		cbNotifiedMu.Unlock()
 	}
 
 	log.Debug("Lancement du processus de mise à jour Windows...")
@@ -819,7 +777,6 @@ func runCycle() {
 		atomic.AddInt64(&cycleErrors, 1)
 		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
-		notifyErrorOnce("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
@@ -827,7 +784,6 @@ func runCycle() {
 		atomic.AddInt64(&cycleErrors, 1)
 		atomic.AddInt64(&consecutiveErrors, 1)
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
-		notifyErrorOnce("Erreur", "Erreur globale du processus de mise à jour.")
 		return
 	}
 
@@ -841,23 +797,12 @@ func runCycle() {
 
 	if len(updates) > 0 {
 		if isRebootPending() {
-			msg := "Redémarrage en attente détecté — installation des mises à jour reportée au prochain cycle."
-			log.Warn(msg)
-			rebootNotifiedMu.Lock()
-			if !rebootNotified {
-				rebootNotified = true
-				rebootNotifiedMu.Unlock()
-				showNotification("Redémarrage requis", msg)
-			} else {
-				rebootNotifiedMu.Unlock()
-			}
+			log.Warn("Redémarrage en attente détecté — installation des mises à jour reportée au prochain cycle.")
 			return
 		}
 		if min := int64(cfg.MinFreeDiskMB); min > 0 {
 			if free := freeDiskMB(); free < min {
-				msg := fmt.Sprintf("Espace disque insuffisant (%d MB libres, minimum %d MB) — installation ignorée.", free, min)
-				log.Warn(msg)
-				notifyErrorOnce("Espace disque insuffisant", msg)
+				log.Warnf("Espace disque insuffisant (%d MB libres, minimum %d MB) — installation ignorée.", free, min)
 				atomic.AddInt64(&updatesSkipped, int64(len(updates)))
 				return
 			}
@@ -869,16 +814,12 @@ func runCycle() {
 			atomic.AddInt64(&cycleErrors, 1)
 			atomic.AddInt64(&consecutiveErrors, 1)
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
-			notifyErrorOnce("Erreur", "Erreur globale du processus de mise à jour.")
 			return
 		}
 	}
 
-	// Successful cycle — reset counters and notification flags.
+	// Successful cycle — reset consecutive error counter.
 	atomic.StoreInt64(&consecutiveErrors, 0)
-	errorNotifiedMu.Lock()
-	errorNotified = false
-	errorNotifiedMu.Unlock()
 	writeStatusJSON()
 	log.Debug("Processus terminé.")
 }
@@ -998,7 +939,6 @@ func runInteractive() {
 		os.Exit(1)
 	}
 
-	showNotification("WinPiBooster démarré", "Surveillance des mises à jour Windows active.")
 	archiveOldLogs()
 	heartbeat()
 
@@ -1039,7 +979,6 @@ func runInteractive() {
 	shutdownCancel()
 	heartbeatTicker.Stop()
 	cycleTicker.Stop()
-	showNotification("WinPiBooster arrêté", "La surveillance des mises à jour Windows est inactive.")
 }
 
 // ─── Report / Help ────────────────────────────────────────────────────────────
