@@ -11,11 +11,9 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 - Envoie une **notification Windows toast** lors de l'installation de mises à jour ou en cas d'erreur fatale
 - Génère un **rapport quotidien à minuit** avec archivage du log et remise à zéro des compteurs
 - Génère un **rapport hebdomadaire chaque dimanche à minuit** avec les totaux de la semaine
-- **Auto-reset du circuit breaker** après N minutes sans erreur (configurable, désactivé par défaut)
 - Archive les logs à chaque lancement, à minuit et lors d'un dépassement de taille (**10 MB** par défaut)
 - Supprime les archives de plus de **30 jours** automatiquement
 - Envoie un **heartbeat toutes les heures** avec uptime et compteurs
-- **Circuit breaker** : pause automatique en cas d'erreurs répétées (seuil configurable)
 - **Instance unique** : empêche le lancement de plusieurs instances interactives simultanées
 - Écrit un fichier **status.json** après chaque cycle réussi
 - Vérifie l'**espace disque libre** avant d'installer (seuil configurable)
@@ -126,14 +124,11 @@ Créer `config.json` dans le même répertoire que `WinPiBooster.exe`. Toutes le
   "max_log_size_mb": 10,
   "ps_timeout_minutes": 10,
   "cmd_timeout_seconds": 300,
-  "circuit_breaker_threshold": 5,
-  "circuit_breaker_pause_minutes": 30,
   "log_level": "info",
   "notifications_enabled": true,
   "min_free_disk_mb": 500,
   "heartbeat_interval_minutes": 60,
-  "retry_delay_seconds": 5,
-  "circuit_breaker_reset_minutes": 0
+  "retry_delay_seconds": 5
 }
 ```
 
@@ -145,14 +140,11 @@ Créer `config.json` dans le même répertoire que `WinPiBooster.exe`. Toutes le
 | `max_log_size_mb` | `10` | Taille maximale de UpdateLog.txt avant rotation (MB) |
 | `ps_timeout_minutes` | `10` | Timeout des commandes PowerShell (minutes) |
 | `cmd_timeout_seconds` | `300` | Timeout des commandes système (secondes) |
-| `circuit_breaker_threshold` | `5` | Nombre d'erreurs consécutives avant déclenchement du circuit breaker |
-| `circuit_breaker_pause_minutes` | `30` | Durée de la pause du circuit breaker (minutes) |
 | `log_level` | `"info"` | Niveau de log : `debug`, `info`, `warn`, `error` (remplace `DEBUG=true`) |
 | `notifications_enabled` | `true` | Activer/désactiver les notifications toast Windows |
 | `min_free_disk_mb` | `500` | Espace disque minimum requis sur C: avant installation (MB) |
 | `heartbeat_interval_minutes` | `60` | Intervalle entre deux heartbeats (minutes, minimum 5) |
 | `retry_delay_seconds` | `5` | Délai de base entre tentatives (`×3`, `×6` pour les suivantes) |
-| `circuit_breaker_reset_minutes` | `0` | Auto-reset du circuit breaker (minutes, `0` = désactivé) |
 
 ## Logs
 
@@ -166,7 +158,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.14.4 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.15.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -191,7 +183,7 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.14.4",
+  "version": "v2.15.0",
   "last_check": "2026-02-24T10:15:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
@@ -226,5 +218,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.14.4" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.15.0" -o WinPiBooster.exe .
 ```
