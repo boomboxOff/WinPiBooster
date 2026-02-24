@@ -224,7 +224,7 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 
 ## Build depuis les sources
 
-Prérequis : [Go 1.22+](https://go.dev/dl/)
+Prérequis : [Go 1.24+](https://go.dev/dl/)
 
 ```bat
 go build -ldflags="-s -w -X main.version=v2.21.0" -o WinPiBooster.exe .
