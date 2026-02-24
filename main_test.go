@@ -1378,6 +1378,314 @@ func TestExportConfig_JSONRoundtrip(t *testing.T) {
 	}
 }
 
+// ─── cleanOldLogsVerbose(true) ────────────────────────────────────────────────
+
+func TestCleanOldLogsVerbose_WithOutput(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Create an expired archive
+	oldFile := filepath.Join(dir, "UpdateLog_expired.txt")
+	if err := os.WriteFile(oldFile, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pastTime := time.Now().Add(-60 * 24 * time.Hour)
+	if err := os.Chtimes(oldFile, pastTime, pastTime); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	cleanOldLogsVerbose(true)
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "1 archive(s) supprimée(s)") {
+		t.Errorf("expected verbose output with count, got: %q", out)
+	}
+}
+
+// ─── writeStatusJSON ──────────────────────────────────────────────────────────
+
+func TestWriteStatusJSON_WritesFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	atomic.StoreInt64(&updatesChecked, 7)
+	atomic.StoreInt64(&updatesInstalled, 2)
+	defer func() {
+		atomic.StoreInt64(&updatesChecked, 0)
+		atomic.StoreInt64(&updatesInstalled, 0)
+	}()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(dir, "status.json"))
+	if err != nil {
+		t.Fatalf("status.json not written: %v", err)
+	}
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if s.UpdatesChecked != 7 {
+		t.Errorf("updates_checked = %d, want 7", s.UpdatesChecked)
+	}
+	if s.UpdatesInstalled != 2 {
+		t.Errorf("updates_installed = %d, want 2", s.UpdatesInstalled)
+	}
+}
+
+// ─── printShowConfig text mode ────────────────────────────────────────────────
+
+func TestPrintShowConfig_TextMode(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig() // os.Args[2:] has no --json in test runner
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	for _, field := range []string{
+		"check_interval_seconds",
+		"retry_attempts",
+		"heartbeat_interval_minutes",
+		"retry_delay_seconds",
+		"notifications_enabled",
+	} {
+		if !strings.Contains(out, field) {
+			t.Errorf("printShowConfig output missing field %q", field)
+		}
+	}
+}
+
+// ─── printExtendedStatus ──────────────────────────────────────────────────────
+
+func TestPrintExtendedStatus_NoPanic(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	// statusService() will fail (SCM not available in test), function must handle gracefully
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	// Should contain config output regardless of SCM error
+	if !strings.Contains(out, "check_interval_seconds") {
+		t.Errorf("expected config in output, got: %q", out)
+	}
+	if !strings.Contains(out, "UpdateLog.txt : absent") {
+		t.Errorf("expected absent log message, got: %q", out)
+	}
+}
+
+func TestPrintExtendedStatus_WithStatusJSON(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Write a fake status.json
+	s := statusJSON{
+		Version:          "v2.12.0",
+		LastCheck:        "2026-02-24T10:00:00Z",
+		UpdatesChecked:   5,
+		UpdatesInstalled: 2,
+	}
+	data, _ := json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "status.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "updates_checked") {
+		t.Errorf("expected status.json data in output, got: %q", out)
+	}
+}
+
+// ─── retryAttempts zero fallback ──────────────────────────────────────────────
+
+func TestRetryAttempts_ZeroFallback(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.RetryAttempts = 0
+	defer func() { cfg = old }()
+
+	if got := retryAttempts(); got != 3 {
+		t.Errorf("retryAttempts() with 0 = %d, want 3 (fallback)", got)
+	}
+}
+
+// ─── validateConfig CircuitBreakerResetMinutes ────────────────────────────────
+
+func TestValidateConfig_WithLogger_NegativeCircuitBreakerReset(t *testing.T) {
+	withTestLogger(t, func() {
+		c := defaults()
+		c.CircuitBreakerResetMinutes = -1
+		validateConfig(c) // must not panic
+	})
+}
+
+// ─── printShowConfig --json via os.Args ───────────────────────────────────────
+
+func TestPrintShowConfig_JSONFlag(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "show-config", "--json"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	var parsed Config
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &parsed); err != nil {
+		t.Errorf("output is not valid JSON: %v\nout=%q", err, out)
+	}
+	if parsed.CheckIntervalSeconds != 60 {
+		t.Errorf("CheckIntervalSeconds = %d, want 60", parsed.CheckIntervalSeconds)
+	}
+}
+
+// ─── cleanOldLogsVerbose: recent file not deleted ────────────────────────────
+
+func TestCleanOldLogsVerbose_RecentFileNotDeleted(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Recent archive (not expired)
+	recent := filepath.Join(dir, "UpdateLog_recent.txt")
+	if err := os.WriteFile(recent, []byte("recent"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanOldLogsVerbose(false)
+
+	if _, err := os.Stat(recent); os.IsNotExist(err) {
+		t.Error("recent log file should NOT be deleted")
+	}
+}
+
+func TestCleanOldLogsVerbose_NonMatchingFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// File that doesn't match UpdateLog_*.txt pattern
+	other := filepath.Join(dir, "otherfile.txt")
+	if err := os.WriteFile(other, []byte("other"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanOldLogsVerbose(false)
+
+	if _, err := os.Stat(other); os.IsNotExist(err) {
+		t.Error("non-matching file should NOT be deleted")
+	}
+}
+
+// ─── tailLogs --lines flag ────────────────────────────────────────────────────
+
+func TestTailLogs_LinesFlag(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	var sb strings.Builder
+	for i := 1; i <= 30; i++ {
+		sb.WriteString(fmt.Sprintf("line %d\n", i))
+	}
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(sb.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "tail", "--lines", "5"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	tailLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "line 30") {
+		t.Errorf("expected line 30, got: %q", out)
+	}
+	if strings.Contains(out, "line 25") {
+		t.Errorf("expected only last 5 lines, but got line 25: %q", out)
+	}
+}
+
 // ─── show-config --json ───────────────────────────────────────────────────────
 
 func TestShowConfigJSON_OutputsValidJSON(t *testing.T) {
@@ -1719,5 +2027,33 @@ func TestMin(t *testing.T) {
 		if got := min(c.a, c.b); got != c.want {
 			t.Errorf("min(%d, %d) = %d, want %d", c.a, c.b, got, c.want)
 		}
+	}
+}
+
+// ─── showNotification disabled ────────────────────────────────────────────────
+
+func TestShowNotification_DisabledNoOp(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.NotificationsEnabled = boolPtr(false)
+	defer func() { cfg = old }()
+
+	// Must be a no-op, no panic
+	showNotification("Test", "Notification désactivée")
+}
+
+// ─── buildWeeklyReport edge cases ────────────────────────────────────────────
+
+func TestBuildWeeklyReport_Zeros(t *testing.T) {
+	got := buildWeeklyReport(0, 0, 0, 0)
+	if !strings.Contains(got, "Rapport hebdomadaire") {
+		t.Errorf("expected weekly report header, got: %q", got)
+	}
+}
+
+func TestBuildWeeklyReport_LargeValues(t *testing.T) {
+	got := buildWeeklyReport(1000, 500, 400, 100)
+	if !strings.Contains(got, "1000") || !strings.Contains(got, "500") {
+		t.Errorf("expected large values in report, got: %q", got)
 	}
 }
