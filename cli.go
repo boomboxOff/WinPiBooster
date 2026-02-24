@@ -45,7 +45,18 @@ func runDiagnose() bool {
 	fmt.Printf("Diagnostic WinPiBooster %s :\n\n", version)
 
 	check("Droits administrateur", checkAdminRights() == nil, "")
-	check("Module PSWindowsUpdate", isPSWindowsUpdateModuleInstalled(), "")
+
+	psModOK := isPSWindowsUpdateModuleInstalled()
+	psModDetail := ""
+	if psModOK {
+		if ver, err := execPS(`(Get-Module PSWindowsUpdate -ListAvailable | Select-Object -First 1).Version.ToString()`); err == nil {
+			v := strings.TrimSpace(ver)
+			if v != "" {
+				psModDetail = "v" + v
+			}
+		}
+	}
+	check("Module PSWindowsUpdate", psModOK, psModDetail)
 
 	out, err := execCommand("sc query wuauserv")
 	wuRunning := err == nil && strings.Contains(out, "RUNNING")

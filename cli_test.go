@@ -19,6 +19,32 @@ func TestFreeDiskMB_Positive(t *testing.T) {
 	}
 }
 
+// ─── runDiagnose() ────────────────────────────────────────────────────────────
+
+func TestRunDiagnose_NoPanic(t *testing.T) {
+	// Capture stdout — runDiagnose() calls execPS/execCommand which may fail in test
+	// context, but the function must not panic and must print the PSWindowsUpdate section.
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	withTestLogger(t, func() {
+		runDiagnose() // return value (bool) ignored
+	})
+	w.Close()
+	os.Stdout = old
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "PSWindowsUpdate") {
+		t.Errorf("expected 'PSWindowsUpdate' in diagnose output, got: %s", out)
+	}
+}
+
 // ─── openLogs() ───────────────────────────────────────────────────────────────
 
 func TestOpenLogs_AbsentFile(t *testing.T) {
