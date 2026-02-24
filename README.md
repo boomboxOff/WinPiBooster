@@ -1,7 +1,6 @@
 # WinPiBooster
 
 ![CI](https://github.com/boomboxOff/WinPiBooster/actions/workflows/ci.yml/badge.svg)
-[![Go Report Card](https://goreportcard.com/badge/github.com/boomboxOff/WinPiBooster)](https://goreportcard.com/report/github.com/boomboxOff/WinPiBooster)
 [![Release](https://img.shields.io/github/v/release/boomboxOff/WinPiBooster)](https://github.com/boomboxOff/WinPiBooster/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/boomboxOff/WinPiBooster)](https://go.dev/dl/)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
