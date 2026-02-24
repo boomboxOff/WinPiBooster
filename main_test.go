@@ -97,6 +97,48 @@ func TestWriteStatusJSON(t *testing.T) {
 	if s.LastCheck == "" {
 		t.Error("LastCheck should not be empty")
 	}
+	if s.NextCheck == "" {
+		t.Error("NextCheck should not be empty")
+	}
+}
+
+func TestWriteStatusJSON_NextCheck(t *testing.T) {
+	oldDir := logDir
+	logDir = t.TempDir()
+	defer func() { logDir = oldDir }()
+
+	oldCfg := cfg
+	cfg = defaults()
+	cfg.CheckIntervalSeconds = 60
+	defer func() { cfg = oldCfg }()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(logDir, "status.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if s.NextCheck == "" {
+		t.Fatal("NextCheck should not be empty")
+	}
+	lastCheck, err := time.Parse(time.RFC3339, s.LastCheck)
+	if err != nil {
+		t.Fatalf("LastCheck parse error: %v", err)
+	}
+	nextCheck, err := time.Parse(time.RFC3339, s.NextCheck)
+	if err != nil {
+		t.Fatalf("NextCheck parse error: %v", err)
+	}
+	// NextCheck must be after LastCheck by roughly the check interval.
+	// RFC3339 has second precision; allow 1s tolerance.
+	diff := nextCheck.Sub(lastCheck)
+	if diff < 59*time.Second || diff > 61*time.Second {
+		t.Errorf("NextCheck - LastCheck = %v, want ~60s", diff)
+	}
 }
 
 // ─── uptime_seconds in status.json ────────────────────────────────────────────

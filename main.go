@@ -287,6 +287,7 @@ func cleanOldLogsVerbose(verbose bool) {
 type statusJSON struct {
 	Version          string         `json:"version"`
 	LastCheck        string         `json:"last_check"`
+	NextCheck        string         `json:"next_check"`
 	UptimeSeconds    int64          `json:"uptime_seconds"`
 	UpdatesChecked   int64          `json:"updates_checked"`
 	UpdatesInstalled int64          `json:"updates_installed"`
@@ -302,9 +303,11 @@ func writeStatusJSON() {
 	copy(history, lastInstalled)
 	lastInstalledMu.Unlock()
 
+	now := time.Now().UTC()
 	s := statusJSON{
 		Version:          version,
-		LastCheck:        time.Now().UTC().Format(time.RFC3339),
+		LastCheck:        now.Format(time.RFC3339),
+		NextCheck:        now.Add(cfg.CheckInterval()).Format(time.RFC3339),
 		UptimeSeconds:    int64(time.Since(startTime).Seconds()),
 		UpdatesChecked:   atomic.LoadInt64(&updatesChecked),
 		UpdatesInstalled: atomic.LoadInt64(&updatesInstalled),

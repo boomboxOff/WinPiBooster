@@ -186,8 +186,9 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.16.0",
+  "version": "v2.17.0",
   "last_check": "2026-02-24T10:15:00Z",
+  "next_check": "2026-02-24T10:16:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
   "updates_installed": 3,
