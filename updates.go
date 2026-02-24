@@ -167,12 +167,14 @@ func runCycle() {
 
 	if err := retryBackoff("installPSWindowsUpdateModule", retryAttempts(), defaultBackoff(), installPSWindowsUpdateModule); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
+		setCycleError(err.Error())
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		return
 	}
 
 	if err := retryBackoff("ensureWindowsUpdateServiceRunning", retryAttempts(), defaultBackoff(), ensureWindowsUpdateServiceRunning); err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
+		setCycleError(err.Error())
 		log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 		return
 	}
@@ -180,6 +182,7 @@ func runCycle() {
 	updates, err := checkAvailableUpdates()
 	if err != nil {
 		atomic.AddInt64(&cycleErrors, 1)
+		setCycleError(err.Error())
 		// Error already logged inside checkAvailableUpdates
 		return
 	}
@@ -201,11 +204,13 @@ func runCycle() {
 		})
 		if err != nil {
 			atomic.AddInt64(&cycleErrors, 1)
+			setCycleError(err.Error())
 			log.Errorf("Erreur globale du processus de mise à jour : %v", err)
 			return
 		}
 	}
 
+	clearCycleError()
 	writeStatusJSON()
 	log.Debug("Processus terminé.")
 }

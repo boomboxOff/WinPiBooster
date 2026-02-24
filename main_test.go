@@ -199,6 +199,56 @@ func TestWriteStatusJSON_WritesFile(t *testing.T) {
 	}
 }
 
+// ─── setCycleError / clearCycleError / last_error ─────────────────────────────
+
+func TestWriteStatusJSON_LastError(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	setCycleError("execPS: exit status 1: Access denied")
+	defer clearCycleError()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(dir, "status.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if s.LastError != "execPS: exit status 1: Access denied" {
+		t.Errorf("LastError = %q, want error message", s.LastError)
+	}
+}
+
+func TestWriteStatusJSON_ClearsLastError(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	setCycleError("some previous error")
+	clearCycleError()
+
+	writeStatusJSON()
+
+	data, err := os.ReadFile(filepath.Join(dir, "status.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var s statusJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if s.LastError != "" {
+		t.Errorf("LastError = %q, want empty after clear", s.LastError)
+	}
+}
+
 // ─── parseRebootPending() ─────────────────────────────────────────────────────
 
 func TestParseRebootPending(t *testing.T) {

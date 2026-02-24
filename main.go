@@ -59,6 +59,10 @@ var (
 	psModuleReady bool
 	psModuleMu    sync.Mutex
 
+	// Last cycle error — set on failure, cleared on success.
+	lastCycleError string
+	lastCycleErrMu sync.Mutex
+
 	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
 	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 )
@@ -68,6 +72,20 @@ type installEntry struct {
 	KB          string `json:"kb"`
 	Title       string `json:"title"`
 	InstalledAt string `json:"installed_at"`
+}
+
+// setCycleError records the error message from the last failed cycle.
+func setCycleError(msg string) {
+	lastCycleErrMu.Lock()
+	lastCycleError = msg
+	lastCycleErrMu.Unlock()
+}
+
+// clearCycleError clears the last cycle error (called on success).
+func clearCycleError() {
+	lastCycleErrMu.Lock()
+	lastCycleError = ""
+	lastCycleErrMu.Unlock()
 }
 
 // recordInstalled appends entries to lastInstalled, capped at 10 (FIFO).
@@ -294,6 +312,7 @@ type statusJSON struct {
 	UpdatesSkipped   int64          `json:"updates_skipped"`
 	CycleErrors      int64          `json:"cycle_errors"`
 	LastInstalled    []installEntry `json:"last_installed"`
+	LastError        string         `json:"last_error"`
 }
 
 // writeStatusJSON writes current counters to status.json atomically.
@@ -302,6 +321,10 @@ func writeStatusJSON() {
 	history := make([]installEntry, len(lastInstalled))
 	copy(history, lastInstalled)
 	lastInstalledMu.Unlock()
+
+	lastCycleErrMu.Lock()
+	errMsg := lastCycleError
+	lastCycleErrMu.Unlock()
 
 	now := time.Now().UTC()
 	s := statusJSON{
@@ -314,6 +337,7 @@ func writeStatusJSON() {
 		UpdatesSkipped:   atomic.LoadInt64(&updatesSkipped),
 		CycleErrors:      atomic.LoadInt64(&cycleErrors),
 		LastInstalled:    history,
+		LastError:        errMsg,
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
