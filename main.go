@@ -63,8 +63,12 @@ var (
 	psModuleMu    sync.Mutex
 
 	// Anti-spam flag: reboot-pending notification sent once per session
-	rebootNotified bool
+	rebootNotified   bool
 	rebootNotifiedMu sync.Mutex
+
+	// Anti-spam flag: circuit breaker notification sent once per CB activation
+	cbNotified   bool
+	cbNotifiedMu sync.Mutex
 
 	// Global shutdown context — cancelled on SIGINT/SIGTERM or service stop.
 	shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
@@ -631,7 +635,21 @@ func runDiagnose() bool {
 	check("Module PSWindowsUpdate", isPSWindowsUpdateModuleInstalled(), "")
 
 	out, err := execCommand("sc query wuauserv")
-	check("Service Windows Update (wuauserv)", err == nil && strings.Contains(out, "RUNNING"), "")
+	wuRunning := err == nil && strings.Contains(out, "RUNNING")
+	var wuDetail string
+	switch {
+	case err != nil:
+		wuDetail = fmt.Sprintf("erreur sc query: %v", err)
+	case strings.Contains(out, "STOPPED"):
+		wuDetail = "arrêté — lancez 'sc start wuauserv' en admin"
+	case strings.Contains(out, "PAUSED"):
+		wuDetail = "en pause"
+	case wuRunning:
+		wuDetail = "en cours d'exécution"
+	default:
+		wuDetail = "état inconnu"
+	}
+	check("Service Windows Update (wuauserv)", wuRunning, wuDetail)
 
 	free := freeDiskMB()
 	check("Espace disque libre (C:)", free >= 500, fmt.Sprintf("%d MB disponibles", free))
@@ -733,13 +751,25 @@ func runCycle() {
 		pause := time.Duration(cfg.CircuitBreakerPauseMinutes) * time.Minute
 		msg := fmt.Sprintf("Circuit ouvert (%d erreurs consécutives) — pause de %v avant le prochain cycle.", threshold, pause)
 		log.Warn(msg)
-		showNotification("Circuit ouvert", msg)
+		// Anti-spam: notify only on first trigger of each CB activation.
+		cbNotifiedMu.Lock()
+		if !cbNotified {
+			cbNotified = true
+			cbNotifiedMu.Unlock()
+			showNotification("Circuit ouvert", msg)
+		} else {
+			cbNotifiedMu.Unlock()
+		}
 		select {
 		case <-time.After(pause):
 		case <-shutdownCtx.Done():
 			return
 		}
 		atomic.StoreInt64(&consecutiveErrors, 0)
+		// Reset flag so the next CB activation can notify again.
+		cbNotifiedMu.Lock()
+		cbNotified = false
+		cbNotifiedMu.Unlock()
 	}
 
 	log.Debug("Lancement du processus de mise à jour Windows...")
@@ -1029,7 +1059,27 @@ func tailLogs() {
 
 // historyLogs scans all log files (current + archives) and prints every
 // "Installation terminée" line in chronological order.
+// Supports --since YYYY-MM-DD to filter entries from a given date (inclusive).
 func historyLogs() {
+	// Parse --since YYYY-MM-DD from os.Args
+	sinceStr := ""
+	args := os.Args[1:]
+	for i, arg := range args {
+		if arg == "--since" && i+1 < len(args) {
+			sinceStr = args[i+1]
+		}
+	}
+	var sinceTime time.Time
+	if sinceStr != "" {
+		t, err := time.Parse("2006-01-02", sinceStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Format --since invalide : %q (attendu YYYY-MM-DD)\n", sinceStr)
+			sinceStr = "" // ignore invalid date, show all
+		} else {
+			sinceTime = t
+		}
+	}
+
 	current := filepath.Join(logDir, "UpdateLog.txt")
 	archives, _ := filepath.Glob(filepath.Join(logDir, "UpdateLog_*.txt"))
 
@@ -1045,13 +1095,23 @@ func historyLogs() {
 		}
 		for _, line := range strings.Split(string(data), "\n") {
 			if strings.Contains(line, "Installation terminée :") {
+				if !sinceTime.IsZero() && len(line) >= 10 {
+					lineDate, err := time.Parse("2006-01-02", line[:10])
+					if err != nil || lineDate.Before(sinceTime) {
+						continue
+					}
+				}
 				fmt.Println(strings.TrimRight(line, "\r"))
 				total++
 			}
 		}
 	}
 	if total == 0 {
-		fmt.Println("Aucune installation enregistrée dans les logs.")
+		if sinceStr != "" {
+			fmt.Printf("Aucune installation enregistrée depuis le %s.\n", sinceStr)
+		} else {
+			fmt.Println("Aucune installation enregistrée dans les logs.")
+		}
 	} else {
 		fmt.Printf("\nTotal : %d installation(s) enregistrée(s).\n", total)
 	}
@@ -1218,6 +1278,7 @@ func printHelp() {
 Usage:
   WinPiBooster.exe                   Mode interactif (console, Ctrl+C pour quitter)
   WinPiBooster.exe --dry-run         Vérifie les mises à jour disponibles sans les installer
+  WinPiBooster.exe check             Alias de --dry-run (même codes de sortie : 0/1/2)
   WinPiBooster.exe install           Installe le service Windows (démarrage automatique)
   WinPiBooster.exe install --start   Installe ET démarre le service en une seule commande
   WinPiBooster.exe start             Démarre le service
@@ -1228,6 +1289,7 @@ Usage:
   WinPiBooster.exe list-logs         Liste tous les fichiers de log avec taille et date
   WinPiBooster.exe tail              Affiche les 20 dernières lignes du log (--lines N pour changer)
   WinPiBooster.exe history           Liste toutes les mises à jour installées (logs courant + archives)
+  WinPiBooster.exe history --since DATE  Filtre les installations depuis DATE (format YYYY-MM-DD)
   WinPiBooster.exe logs              Ouvre UpdateLog.txt dans le Bloc-notes
   WinPiBooster.exe report            Affiche les compteurs courants (sans reset)
   WinPiBooster.exe test-notify       Envoie une notification toast de test
@@ -1340,6 +1402,8 @@ func main() {
 		tailLogs()
 	case "history":
 		historyLogs()
+	case "check":
+		runDryRun()
 	case "logs":
 		openLogs()
 	case "report":

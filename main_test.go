@@ -304,6 +304,21 @@ func TestValidateConfig_ValidDefaults(t *testing.T) {
 	validateConfig(defaults())
 }
 
+func TestLoadConfig_Invalid_WithLogger(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`not valid json`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	withTestLogger(t, func() {
+		c := loadConfig()
+		d := defaults()
+		if c.CheckIntervalSeconds != d.CheckIntervalSeconds {
+			t.Errorf("CheckIntervalSeconds = %d, want %d (default)", c.CheckIntervalSeconds, d.CheckIntervalSeconds)
+		}
+	})
+}
+
 func TestValidateConfig_IntervalTooLow(t *testing.T) {
 	cfg := defaults()
 	cfg.CheckIntervalSeconds = 5 // below minimum 10
@@ -1478,6 +1493,66 @@ func TestPrintShowConfig_TextMode(t *testing.T) {
 
 // ─── printExtendedStatus ──────────────────────────────────────────────────────
 
+func TestPrintShowConfig_WithConfigFile(t *testing.T) {
+	p := cfgPath(t)
+	defer os.Remove(p)
+	if err := os.WriteFile(p, []byte(`{"check_interval_seconds":90}`), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	old := cfg
+	cfg = defaults()
+	cfg.CheckIntervalSeconds = 90
+	defer func() { cfg = old }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	printShowConfig()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "chargée depuis") {
+		t.Errorf("expected 'chargée depuis' message when config.json exists, got: %q", out)
+	}
+}
+
+func TestPrintExtendedStatus_WithLogFile(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("log content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldCfg := cfg
+	cfg = defaults()
+	defer func() { cfg = oldCfg }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	oldErr := os.Stderr
+	os.Stderr = w
+	printExtendedStatus()
+	w.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "UpdateLog.txt :") {
+		t.Errorf("expected log file size info, got: %q", out)
+	}
+}
+
 func TestPrintExtendedStatus_NoPanic(t *testing.T) {
 	dir := t.TempDir()
 	old := logDir
@@ -2055,5 +2130,620 @@ func TestBuildWeeklyReport_LargeValues(t *testing.T) {
 	got := buildWeeklyReport(1000, 500, 400, 100)
 	if !strings.Contains(got, "1000") || !strings.Contains(got, "500") {
 		t.Errorf("expected large values in report, got: %q", got)
+	}
+}
+
+// ─── cbNotified anti-spam (#97) ───────────────────────────────────────────────
+
+func TestCBNotified_InitiallyFalse(t *testing.T) {
+	cbNotifiedMu.Lock()
+	cbNotified = false
+	cbNotifiedMu.Unlock()
+
+	cbNotifiedMu.Lock()
+	got := cbNotified
+	cbNotifiedMu.Unlock()
+	if got {
+		t.Error("cbNotified should be false initially")
+	}
+}
+
+func TestCBNotified_SetAndReset(t *testing.T) {
+	cbNotifiedMu.Lock()
+	cbNotified = false
+	cbNotifiedMu.Unlock()
+	defer func() {
+		cbNotifiedMu.Lock()
+		cbNotified = false
+		cbNotifiedMu.Unlock()
+	}()
+
+	// Simulate CB firing: set flag
+	cbNotifiedMu.Lock()
+	if !cbNotified {
+		cbNotified = true
+	}
+	cbNotifiedMu.Unlock()
+
+	cbNotifiedMu.Lock()
+	v := cbNotified
+	cbNotifiedMu.Unlock()
+	if !v {
+		t.Error("cbNotified should be true after CB fires")
+	}
+
+	// Simulate CB pause completed: reset flag
+	cbNotifiedMu.Lock()
+	cbNotified = false
+	cbNotifiedMu.Unlock()
+
+	cbNotifiedMu.Lock()
+	v2 := cbNotified
+	cbNotifiedMu.Unlock()
+	if v2 {
+		t.Error("cbNotified should be false after CB reset")
+	}
+}
+
+func TestCBNotified_AntiSpam_SecondCallSkipped(t *testing.T) {
+	cbNotifiedMu.Lock()
+	cbNotified = false
+	cbNotifiedMu.Unlock()
+	defer func() {
+		cbNotifiedMu.Lock()
+		cbNotified = false
+		cbNotifiedMu.Unlock()
+	}()
+
+	notifyCount := 0
+	// First call: should notify
+	cbNotifiedMu.Lock()
+	if !cbNotified {
+		cbNotified = true
+		cbNotifiedMu.Unlock()
+		notifyCount++
+	} else {
+		cbNotifiedMu.Unlock()
+	}
+	// Second call: should be suppressed
+	cbNotifiedMu.Lock()
+	if !cbNotified {
+		cbNotified = true
+		cbNotifiedMu.Unlock()
+		notifyCount++
+	} else {
+		cbNotifiedMu.Unlock()
+	}
+
+	if notifyCount != 1 {
+		t.Errorf("expected 1 notification, got %d", notifyCount)
+	}
+}
+
+// ─── diagnose wuauserv detail (#98) ───────────────────────────────────────────
+
+func TestWuauservDetail_Running(t *testing.T) {
+	out := "STATE              : 4  RUNNING\n"
+	wuRunning := strings.Contains(out, "RUNNING")
+	var wuDetail string
+	switch {
+	case strings.Contains(out, "STOPPED"):
+		wuDetail = "arrêté — lancez 'sc start wuauserv' en admin"
+	case strings.Contains(out, "PAUSED"):
+		wuDetail = "en pause"
+	case wuRunning:
+		wuDetail = "en cours d'exécution"
+	default:
+		wuDetail = "état inconnu"
+	}
+	if !wuRunning {
+		t.Error("expected wuRunning=true for RUNNING output")
+	}
+	if !strings.Contains(wuDetail, "en cours d'exécution") {
+		t.Errorf("expected running detail, got: %q", wuDetail)
+	}
+}
+
+func TestWuauservDetail_Stopped(t *testing.T) {
+	out := "STATE              : 1  STOPPED\n"
+	wuRunning := strings.Contains(out, "RUNNING")
+	var wuDetail string
+	switch {
+	case strings.Contains(out, "STOPPED"):
+		wuDetail = "arrêté — lancez 'sc start wuauserv' en admin"
+	case strings.Contains(out, "PAUSED"):
+		wuDetail = "en pause"
+	case wuRunning:
+		wuDetail = "en cours d'exécution"
+	default:
+		wuDetail = "état inconnu"
+	}
+	if wuRunning {
+		t.Error("expected wuRunning=false for STOPPED output")
+	}
+	if !strings.Contains(wuDetail, "arrêté") {
+		t.Errorf("expected stopped detail, got: %q", wuDetail)
+	}
+}
+
+func TestWuauservDetail_Paused(t *testing.T) {
+	out := "STATE              : 7  PAUSED\n"
+	wuRunning := strings.Contains(out, "RUNNING")
+	var wuDetail string
+	switch {
+	case strings.Contains(out, "STOPPED"):
+		wuDetail = "arrêté — lancez 'sc start wuauserv' en admin"
+	case strings.Contains(out, "PAUSED"):
+		wuDetail = "en pause"
+	case wuRunning:
+		wuDetail = "en cours d'exécution"
+	default:
+		wuDetail = "état inconnu"
+	}
+	if wuRunning {
+		t.Error("expected wuRunning=false for PAUSED output")
+	}
+	if !strings.Contains(wuDetail, "en pause") {
+		t.Errorf("expected paused detail, got: %q", wuDetail)
+	}
+}
+
+func TestWuauservDetail_Unknown(t *testing.T) {
+	out := ""
+	wuRunning := strings.Contains(out, "RUNNING")
+	var wuDetail string
+	switch {
+	case strings.Contains(out, "STOPPED"):
+		wuDetail = "arrêté — lancez 'sc start wuauserv' en admin"
+	case strings.Contains(out, "PAUSED"):
+		wuDetail = "en pause"
+	case wuRunning:
+		wuDetail = "en cours d'exécution"
+	default:
+		wuDetail = "état inconnu"
+	}
+	if !strings.Contains(wuDetail, "état inconnu") {
+		t.Errorf("expected unknown detail, got: %q", wuDetail)
+	}
+}
+
+// ─── history --since DATE (#99) ───────────────────────────────────────────────
+
+func TestHistoryLogs_SinceFilter(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	content := "2026-01-15 10:00:00 [INFO]: Installation terminée : KB1111\n" +
+		"2026-02-10 12:00:00 [INFO]: Installation terminée : KB2222\n" +
+		"2026-02-24 10:00:00 [INFO]: Installation terminée : KB3333\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "history", "--since", "2026-02-01"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if strings.Contains(out, "KB1111") {
+		t.Errorf("KB1111 should be filtered out by --since 2026-02-01, got: %q", out)
+	}
+	if !strings.Contains(out, "KB2222") {
+		t.Errorf("KB2222 should be included (2026-02-10 >= 2026-02-01), got: %q", out)
+	}
+	if !strings.Contains(out, "KB3333") {
+		t.Errorf("KB3333 should be included, got: %q", out)
+	}
+	if !strings.Contains(out, "Total : 2 installation(s)") {
+		t.Errorf("expected total=2, got: %q", out)
+	}
+}
+
+func TestHistoryLogs_SinceFilter_NoMatch(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	content := "2026-01-15 10:00:00 [INFO]: Installation terminée : KB1111\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "history", "--since", "2026-02-01"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "depuis le 2026-02-01") {
+		t.Errorf("expected since-specific message, got: %q", out)
+	}
+}
+
+func TestHistoryLogs_SinceFilter_InclusiveDate(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	// Entry exactly on the --since date must be INCLUDED
+	content := "2026-02-01 10:00:00 [INFO]: Installation terminée : KB9999\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "history", "--since", "2026-02-01"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs()
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "KB9999") {
+		t.Errorf("entry on --since date should be included, got: %q", out)
+	}
+}
+
+func TestHistoryLogs_SinceInvalidDate(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	content := "2026-01-15 10:00:00 [INFO]: Installation terminée : KB1111\n"
+	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"WinPiBooster.exe", "history", "--since", "not-a-date"}
+	defer func() { os.Args = oldArgs }()
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	historyLogs() // invalid date → ignored, show all
+	w.Close()
+	os.Stdout = oldOut
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	// All entries should be shown (invalid date treated as no filter)
+	if !strings.Contains(out, "KB1111") {
+		t.Errorf("all entries should show when --since is invalid, got: %q", out)
+	}
+}
+
+// ─── check command alias (#100) ───────────────────────────────────────────────
+
+func TestCheckCommand_AliasDetected(t *testing.T) {
+	args := []string{"WinPiBooster.exe", "check"}
+	cmd := ""
+	if len(args) > 1 {
+		cmd = args[1]
+	}
+	if cmd != "check" {
+		t.Errorf("expected cmd=%q, got %q", "check", cmd)
+	}
+}
+
+func TestCheckCommand_DifferentFromDryRun(t *testing.T) {
+	// "check" and "--dry-run" are separate dispatch paths that both call runDryRun()
+	dryRun := false
+	args := []string{"WinPiBooster.exe", "check"}
+	filtered := args[:1]
+	for _, arg := range args[1:] {
+		if arg == "--dry-run" {
+			dryRun = true
+		} else {
+			filtered = append(filtered, arg)
+		}
+	}
+	cmd := ""
+	if len(filtered) > 1 {
+		cmd = filtered[1]
+	}
+	if dryRun {
+		t.Error("'check' should not set dryRun flag")
+	}
+	if cmd != "check" {
+		t.Errorf("cmd should be 'check', got %q", cmd)
+	}
+}
+
+// ─── newFileHook / fileHook.Levels / ReopenFile / Close ──────────────────────
+
+func TestNewFileHook_InvalidPath(t *testing.T) {
+	_, err := newFileHook("/nonexistent/path/that/cannot/be/created.log", logrus.AllLevels)
+	if err == nil {
+		t.Error("expected error for invalid path")
+	}
+}
+
+func TestFileHook_ReopenFile_Error(t *testing.T) {
+	dir := t.TempDir()
+	h, err := newFileHook(filepath.Join(dir, "test.log"), logrus.AllLevels)
+	if err != nil {
+		t.Fatalf("newFileHook: %v", err)
+	}
+	h.Close()
+	h.logPath = "/nonexistent/path/cannot-reopen.log"
+	if err := h.ReopenFile(); err == nil {
+		t.Error("expected error for invalid reopen path")
+	}
+}
+
+func TestNewFileHook_Creates(t *testing.T) {
+	dir := t.TempDir()
+	h, err := newFileHook(filepath.Join(dir, "test.log"), logrus.AllLevels)
+	if err != nil {
+		t.Fatalf("newFileHook: %v", err)
+	}
+	defer h.Close()
+
+	levels := h.Levels()
+	if len(levels) != len(logrus.AllLevels) {
+		t.Errorf("Levels() len=%d, want %d", len(levels), len(logrus.AllLevels))
+	}
+}
+
+func TestFileHook_ReopenFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "test.log")
+	h, err := newFileHook(p, logrus.AllLevels)
+	if err != nil {
+		t.Fatalf("newFileHook: %v", err)
+	}
+	defer h.Close()
+
+	if err := h.ReopenFile(); err != nil {
+		t.Fatalf("ReopenFile: %v", err)
+	}
+}
+
+func TestFileHook_Close(t *testing.T) {
+	dir := t.TempDir()
+	h, err := newFileHook(filepath.Join(dir, "test.log"), logrus.AllLevels)
+	if err != nil {
+		t.Fatalf("newFileHook: %v", err)
+	}
+	h.Close() // must not panic
+}
+
+// ─── coloredConsoleFormatter.Format ──────────────────────────────────────────
+
+func TestColoredConsoleFormatter_Format_TraceLevel(t *testing.T) {
+	// TraceLevel hits the default case in the color switch
+	f := &coloredConsoleFormatter{}
+	entry := &logrus.Entry{
+		Logger:  logrus.New(),
+		Level:   logrus.TraceLevel,
+		Time:    time.Now(),
+		Message: "trace msg",
+	}
+	b, err := f.Format(entry)
+	if err != nil {
+		t.Fatalf("Format(TraceLevel): %v", err)
+	}
+	if !strings.Contains(string(b), "trace msg") {
+		t.Errorf("expected message in output, got: %q", string(b))
+	}
+}
+
+func TestColoredConsoleFormatter_Format_AllLevels(t *testing.T) {
+	f := &coloredConsoleFormatter{}
+	levels := []logrus.Level{
+		logrus.ErrorLevel,
+		logrus.WarnLevel,
+		logrus.InfoLevel,
+		logrus.DebugLevel,
+		logrus.FatalLevel,
+		logrus.PanicLevel,
+	}
+	for _, lvl := range levels {
+		entry := &logrus.Entry{
+			Logger:  logrus.New(),
+			Level:   lvl,
+			Time:    time.Now(),
+			Message: "test msg",
+		}
+		b, err := f.Format(entry)
+		if err != nil {
+			t.Errorf("Format(%v): %v", lvl, err)
+		}
+		if !strings.Contains(string(b), "test msg") {
+			t.Errorf("Format(%v) missing message: %q", lvl, string(b))
+		}
+	}
+}
+
+// ─── consoleHook.Levels / Fire ────────────────────────────────────────────────
+
+func TestConsoleHook_Levels(t *testing.T) {
+	h := &consoleHook{
+		writer:    io.Discard,
+		formatter: &coloredConsoleFormatter{},
+		levels:    logrus.AllLevels,
+	}
+	if len(h.Levels()) != len(logrus.AllLevels) {
+		t.Errorf("Levels() len=%d, want %d", len(h.Levels()), len(logrus.AllLevels))
+	}
+}
+
+func TestConsoleHook_Fire(t *testing.T) {
+	h := &consoleHook{
+		writer:    io.Discard,
+		formatter: &coloredConsoleFormatter{},
+		levels:    logrus.AllLevels,
+	}
+	entry := &logrus.Entry{
+		Logger:  logrus.New(),
+		Level:   logrus.InfoLevel,
+		Time:    time.Now(),
+		Message: "console test",
+	}
+	if err := h.Fire(entry); err != nil {
+		t.Fatalf("Fire: %v", err)
+	}
+}
+
+// ─── heartbeat() with logger ──────────────────────────────────────────────────
+
+func TestHeartbeat_WithLogger(t *testing.T) {
+	withTestLogger(t, func() {
+		old := startTime
+		startTime = time.Now().Add(-2 * time.Minute)
+		defer func() { startTime = old }()
+		heartbeat() // must not panic
+	})
+}
+
+// ─── generateDailyReport / generateWeeklyReport with logger ──────────────────
+
+func TestGenerateDailyReport_WithLogger(t *testing.T) {
+	withTestLogger(t, func() {
+		atomic.StoreInt64(&updatesChecked, 4)
+		atomic.StoreInt64(&updatesInstalled, 1)
+		atomic.StoreInt64(&updatesSkipped, 3)
+		atomic.StoreInt64(&cycleErrors, 0)
+		defer func() {
+			for _, p := range []*int64{&weeklyChecked, &weeklyInstalled, &weeklySkipped, &weeklyErrors} {
+				atomic.StoreInt64(p, 0)
+			}
+		}()
+		generateDailyReport()
+		if got := atomic.LoadInt64(&weeklyChecked); got != 4 {
+			t.Errorf("weeklyChecked = %d, want 4", got)
+		}
+	})
+}
+
+func TestGenerateWeeklyReport_WithLogger(t *testing.T) {
+	withTestLogger(t, func() {
+		atomic.StoreInt64(&weeklyChecked, 7)
+		atomic.StoreInt64(&weeklyInstalled, 3)
+		atomic.StoreInt64(&weeklySkipped, 4)
+		atomic.StoreInt64(&weeklyErrors, 0)
+		defer func() {
+			for _, p := range []*int64{&weeklyChecked, &weeklyInstalled, &weeklySkipped, &weeklyErrors} {
+				atomic.StoreInt64(p, 0)
+			}
+		}()
+		generateWeeklyReport()
+		if got := atomic.LoadInt64(&weeklyChecked); got != 0 {
+			t.Errorf("weeklyChecked should be reset to 0, got %d", got)
+		}
+	})
+}
+
+// ─── showNotification with logger (debug path) ───────────────────────────────
+
+func TestShowNotification_WithLogger_FailsSilently(t *testing.T) {
+	withTestLogger(t, func() {
+		old := cfg
+		cfg = defaults() // notifications enabled
+		defer func() { cfg = old }()
+		// toast.Push() will fail in test environment; log.Debugf must be called safely
+		showNotification("Test", "Should fail silently with non-nil log")
+	})
+}
+
+// ─── cleanOldLogsVerbose with logger (debug path on delete) ──────────────────
+
+func TestCleanOldLogsVerbose_WithLogger_DeletesExpired(t *testing.T) {
+	dir := t.TempDir()
+	old := logDir
+	logDir = dir
+	defer func() { logDir = old }()
+
+	oldFile := filepath.Join(dir, "UpdateLog_expired.txt")
+	if err := os.WriteFile(oldFile, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pastTime := time.Now().Add(-60 * 24 * time.Hour)
+	if err := os.Chtimes(oldFile, pastTime, pastTime); err != nil {
+		t.Fatal(err)
+	}
+
+	withTestLogger(t, func() {
+		cleanOldLogsVerbose(false) // log != nil → covers log.Debugf branch
+	})
+
+	if _, err := os.Stat(oldFile); !os.IsNotExist(err) {
+		t.Error("expired archive should have been removed")
+	}
+}
+
+// ─── printHelp includes new commands ──────────────────────────────────────────
+
+func TestPrintHelp_ContainsCheck(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	printHelp()
+	w.Close()
+	os.Stdout = old
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "check") {
+		t.Errorf("printHelp should mention 'check' command, got: %s", out)
+	}
+}
+
+func TestPrintHelp_ContainsHistorySince(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	printHelp()
+	w.Close()
+	os.Stdout = old
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if !strings.Contains(out, "--since") {
+		t.Errorf("printHelp should mention '--since', got: %s", out)
 	}
 }

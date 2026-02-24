@@ -12,6 +12,7 @@ Binaire Windows de surveillance et d'installation automatique des mises à jour 
 - Génère un **rapport quotidien à minuit** avec archivage du log et remise à zéro des compteurs
 - Génère un **rapport hebdomadaire chaque dimanche à minuit** avec les totaux de la semaine
 - Notification toast unique quand un **redémarrage est en attente** (anti-spam : une seule fois par session)
+- Notification toast unique quand le **circuit breaker se déclenche** (anti-spam : une notification par activation)
 - **Auto-reset du circuit breaker** après N minutes sans erreur (configurable, désactivé par défaut)
 - Archive les logs à chaque lancement, à minuit et lors d'un dépassement de taille (**10 MB** par défaut)
 - Supprime les archives de plus de **30 jours** automatiquement
@@ -65,6 +66,7 @@ WinPiBooster.exe
 |---|---|
 | `WinPiBooster.exe` | Mode interactif (console, Ctrl+C pour quitter) |
 | `WinPiBooster.exe --dry-run` | Vérifie les mises à jour disponibles sans les installer |
+| `WinPiBooster.exe check` | Alias de `--dry-run` (mêmes codes de sortie : 0/1/2) |
 | `WinPiBooster.exe install` | Installe le service Windows (démarrage automatique) |
 | `WinPiBooster.exe start` | Démarre le service |
 | `WinPiBooster.exe stop` | Arrête le service |
@@ -75,6 +77,7 @@ WinPiBooster.exe
 | `WinPiBooster.exe list-logs` | Liste tous les fichiers de log avec taille et date |
 | `WinPiBooster.exe tail` | Affiche les 20 dernières lignes du log (`--lines N` pour changer) |
 | `WinPiBooster.exe history` | Liste toutes les mises à jour installées (logs courant + archives) |
+| `WinPiBooster.exe history --since DATE` | Filtre les installations depuis `DATE` (format `YYYY-MM-DD`) |
 | `WinPiBooster.exe logs` | Ouvre `UpdateLog.txt` dans le Bloc-notes |
 | `WinPiBooster.exe report` | Affiche les compteurs courants (sans reset) |
 | `WinPiBooster.exe reset-counters` | Remet les compteurs à zéro et réécrit status.json |
@@ -166,7 +169,7 @@ Les archives de plus de 30 jours sont supprimées automatiquement.
 **Format fichier** (plain text) :
 ```
 2026-02-24 10:00:00 [INFO]: ──────────────────────────────────────────────────────────────
-2026-02-24 10:00:00 [INFO]: WinPiBooster v2.13.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
+2026-02-24 10:00:00 [INFO]: WinPiBooster v2.14.0 — actif depuis 0m 0s | vérifications: 0 | installées: 0 | erreurs: 0
 2026-02-24 10:34:00 [INFO]: Mise à jour disponible : KB5034441
 ```
 
@@ -191,7 +194,7 @@ Après chaque cycle réussi, WinPiBooster écrit `status.json` dans le répertoi
 
 ```json
 {
-  "version": "v2.13.0",
+  "version": "v2.14.0",
   "last_check": "2026-02-24T10:15:00Z",
   "uptime_seconds": 3600,
   "updates_checked": 10,
@@ -218,7 +221,7 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 2. `go vet` — analyse statique de base
 3. `staticcheck` — analyse statique avancée
 4. `go test -race -count=1 -timeout 120s` — tests unitaires avec détecteur de races
-5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **35%**)
+5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **40%**)
 6. `go build` — compilation du binaire final
 
 ## Build depuis les sources
@@ -226,5 +229,5 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 Prérequis : [Go 1.22+](https://go.dev/dl/)
 
 ```bat
-go build -ldflags="-s -w -X main.version=v2.13.0" -o WinPiBooster.exe .
+go build -ldflags="-s -w -X main.version=v2.14.0" -o WinPiBooster.exe .
 ```
