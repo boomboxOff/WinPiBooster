@@ -1113,7 +1113,21 @@ func printExtendedStatus() {
 }
 
 // printShowConfig displays the active configuration (loaded values or defaults).
+// If --json is in os.Args, outputs compact JSON instead of human-readable text.
 func printShowConfig() {
+	// --json flag: output raw JSON
+	for _, arg := range os.Args[2:] {
+		if arg == "--json" {
+			data, err := json.MarshalIndent(cfg, "", "  ")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Erreur JSON : %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(string(data))
+			return
+		}
+	}
+
 	exePath, _ := os.Executable()
 	cfgPath := filepath.Join(filepath.Dir(exePath), "config.json")
 	_, err := os.Stat(cfgPath)
@@ -1123,15 +1137,20 @@ func printShowConfig() {
 		fmt.Println("Aucun config.json trouvé — valeurs par défaut utilisées.")
 		fmt.Println()
 	}
-	fmt.Printf("  check_interval_seconds       : %d\n", cfg.CheckIntervalSeconds)
-	fmt.Printf("  retry_attempts               : %d\n", cfg.RetryAttempts)
-	fmt.Printf("  log_retention_days           : %d\n", cfg.LogRetentionDays)
-	fmt.Printf("  max_log_size_mb              : %d\n", cfg.MaxLogSizeMB)
-	fmt.Printf("  ps_timeout_minutes           : %d\n", cfg.PSTimeoutMinutes)
-	fmt.Printf("  cmd_timeout_seconds          : %d\n", cfg.CmdTimeoutSeconds)
-	fmt.Printf("  circuit_breaker_threshold    : %d\n", cfg.CircuitBreakerThreshold)
-	fmt.Printf("  circuit_breaker_pause_minutes: %d\n", cfg.CircuitBreakerPauseMinutes)
-	fmt.Printf("  log_level                    : %s\n", cfg.LogLevel)
+	fmt.Printf("  check_interval_seconds          : %d\n", cfg.CheckIntervalSeconds)
+	fmt.Printf("  retry_attempts                  : %d\n", cfg.RetryAttempts)
+	fmt.Printf("  log_retention_days              : %d\n", cfg.LogRetentionDays)
+	fmt.Printf("  max_log_size_mb                 : %d\n", cfg.MaxLogSizeMB)
+	fmt.Printf("  ps_timeout_minutes              : %d\n", cfg.PSTimeoutMinutes)
+	fmt.Printf("  cmd_timeout_seconds             : %d\n", cfg.CmdTimeoutSeconds)
+	fmt.Printf("  circuit_breaker_threshold       : %d\n", cfg.CircuitBreakerThreshold)
+	fmt.Printf("  circuit_breaker_pause_minutes   : %d\n", cfg.CircuitBreakerPauseMinutes)
+	fmt.Printf("  circuit_breaker_reset_minutes   : %d\n", cfg.CircuitBreakerResetMinutes)
+	fmt.Printf("  log_level                       : %s\n", cfg.LogLevel)
+	fmt.Printf("  notifications_enabled           : %v\n", cfg.NotificationsOn())
+	fmt.Printf("  min_free_disk_mb                : %d\n", cfg.MinFreeDiskMB)
+	fmt.Printf("  heartbeat_interval_minutes      : %d\n", cfg.HeartbeatIntervalMinutes)
+	fmt.Printf("  retry_delay_seconds             : %d\n", cfg.RetryDelaySeconds)
 }
 
 // exportConfig writes the active configuration to config.json in the executable directory.

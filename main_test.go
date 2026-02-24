@@ -1378,6 +1378,47 @@ func TestExportConfig_JSONRoundtrip(t *testing.T) {
 	}
 }
 
+// ─── show-config --json ───────────────────────────────────────────────────────
+
+func TestShowConfigJSON_OutputsValidJSON(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	defer func() { cfg = old }()
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	var back Config
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if back.CheckIntervalSeconds != cfg.CheckIntervalSeconds {
+		t.Errorf("CheckIntervalSeconds = %d, want %d", back.CheckIntervalSeconds, cfg.CheckIntervalSeconds)
+	}
+}
+
+func TestShowConfigJSON_ContainsNewFields(t *testing.T) {
+	old := cfg
+	cfg = defaults()
+	cfg.HeartbeatIntervalMinutes = 30
+	cfg.RetryDelaySeconds = 3
+	cfg.CircuitBreakerResetMinutes = 10
+	defer func() { cfg = old }()
+
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	s := string(data)
+	for _, key := range []string{
+		"heartbeat_interval_minutes",
+		"retry_delay_seconds",
+		"circuit_breaker_reset_minutes",
+	} {
+		if !strings.Contains(s, key) {
+			t.Errorf("JSON missing key %q", key)
+		}
+	}
+}
+
 // ─── install --start flag detection ───────────────────────────────────────────
 
 func TestInstallStartFlag_Detected(t *testing.T) {
