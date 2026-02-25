@@ -217,9 +217,8 @@ Le pipeline CI s'exécute sur `windows-latest` à chaque push sur `master` :
 1. `go mod tidy` — vérifie la cohérence du module
 2. `go vet` — analyse statique de base
 3. `staticcheck` — analyse statique avancée
-4. `go test -race -count=1 -timeout 120s` — tests unitaires avec détecteur de races
-5. `go test -count=1 -timeout 120s -coverprofile` — couverture de code (seuil minimum : **40%**)
-6. `go build` — compilation du binaire final
+4. `go test -race -count=1 -timeout 120s -coverprofile` — tests unitaires + couverture (seuil minimum : **40%**)
+5. `go build` — compilation du binaire final
 
 ## Build depuis les sources
 
