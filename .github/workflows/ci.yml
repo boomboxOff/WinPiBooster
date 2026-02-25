@@ -31,6 +31,7 @@ jobs:
           staticcheck .
 
       - name: Test with race detector and coverage
+        shell: cmd
         run: go test -race -count=1 -timeout 120s -coverprofile=coverage.out .
 
       - name: Coverage report
