@@ -139,11 +139,11 @@ func runDryRun() {
 // listLogs prints all log files (current + archives) with size and modification date.
 func listLogs() {
 	// Current log
-	current := filepath.Join(logDir, "UpdateLog.txt")
+	current := filepath.Join(logsDir, "UpdateLog.txt")
 	entries := []string{current}
 
 	// Archives
-	pattern := filepath.Join(logDir, "UpdateLog_*.txt")
+	pattern := filepath.Join(logsDir, "UpdateLog_*.txt")
 	archives, err := filepath.Glob(pattern)
 	if err == nil {
 		entries = append(entries, archives...)
@@ -162,7 +162,7 @@ func listLogs() {
 			info.ModTime().Format("2006-01-02 15:04:05"))
 	}
 	if !found {
-		fmt.Printf("Aucun fichier de log dans %s\n", logDir)
+		fmt.Printf("Aucun fichier de log dans %s\n", logsDir)
 	}
 }
 
@@ -185,7 +185,7 @@ func tailLogs() {
 		}
 	}
 
-	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	logPath := filepath.Join(logsDir, "UpdateLog.txt")
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		fmt.Printf("Aucun fichier de log trouvé : %s\n", logPath)
@@ -238,8 +238,8 @@ func historyLogs() {
 		}
 	}
 
-	current := filepath.Join(logDir, "UpdateLog.txt")
-	archives, _ := filepath.Glob(filepath.Join(logDir, "UpdateLog_*.txt"))
+	current := filepath.Join(logsDir, "UpdateLog.txt")
+	archives, _ := filepath.Glob(filepath.Join(logsDir, "UpdateLog_*.txt"))
 
 	// Build ordered file list: archives first (sorted), then current log
 	sort.Strings(archives)
@@ -277,7 +277,7 @@ func historyLogs() {
 
 // openLogs opens UpdateLog.txt in Notepad.
 func openLogs() {
-	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	logPath := filepath.Join(logsDir, "UpdateLog.txt")
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		fmt.Printf("Aucun fichier de log trouvé : %s\n", logPath)
 		return
@@ -303,7 +303,7 @@ func printExtendedStatus() {
 	fmt.Printf("  ps_timeout_minutes           : %d\n", cfg.PSTimeoutMinutes)
 	fmt.Printf("  cmd_timeout_seconds          : %d\n", cfg.CmdTimeoutSeconds)
 	// Log file size
-	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	logPath := filepath.Join(logsDir, "UpdateLog.txt")
 	if info, err := os.Stat(logPath); err == nil {
 		fmt.Printf("\nFichier de log :\n  UpdateLog.txt : %.1f KB\n", float64(info.Size())/1024.0)
 	} else {

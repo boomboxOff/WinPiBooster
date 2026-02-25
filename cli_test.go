@@ -53,9 +53,10 @@ func TestRunDiagnose_NoPanic(t *testing.T) {
 
 func TestOpenLogs_AbsentFile(t *testing.T) {
 	// Point logDir at a temp dir with no UpdateLog.txt — should not panic.
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = t.TempDir()
-	defer func() { logDir = old }()
+	logsDir = logDir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -339,9 +340,10 @@ func TestPrintShowConfig_WithConfigFile(t *testing.T) {
 // ─── resetCounters() ──────────────────────────────────────────────────────────
 
 func TestResetCounters(t *testing.T) {
-	oldDir := logDir
+	oldDir, oldLogsDir := logDir, logsDir
 	logDir = t.TempDir()
-	defer func() { logDir = oldDir }()
+	logsDir = logDir
+	defer func() { logDir = oldDir; logsDir = oldLogsDir }()
 
 	atomic.StoreInt64(&updatesChecked, 5)
 	atomic.StoreInt64(&updatesInstalled, 2)
@@ -379,9 +381,10 @@ func TestResetCounters(t *testing.T) {
 
 func TestTailLogs_LastLines(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Write 30 lines numbered 1..30
 	var sb strings.Builder
@@ -413,9 +416,10 @@ func TestTailLogs_LastLines(t *testing.T) {
 
 func TestTailLogs_AbsentFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	r, w, _ := os.Pipe()
 	old2 := os.Stdout
@@ -433,9 +437,10 @@ func TestTailLogs_AbsentFile(t *testing.T) {
 
 func TestTailLogs_LinesFlag(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	var sb strings.Builder
 	for i := 1; i <= 30; i++ {
@@ -472,9 +477,10 @@ func TestTailLogs_LinesFlag(t *testing.T) {
 
 func TestListLogs_ShowsFiles(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Create current log + one archive.
 	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("current"), 0644); err != nil {
@@ -508,9 +514,10 @@ func TestListLogs_ShowsFiles(t *testing.T) {
 
 func TestListLogs_NoFiles(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -535,9 +542,10 @@ func TestListLogs_NoFiles(t *testing.T) {
 
 func TestHistoryLogs_NoFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	r, w, _ := os.Pipe()
 	oldOut := os.Stdout
@@ -556,9 +564,10 @@ func TestHistoryLogs_NoFile(t *testing.T) {
 
 func TestHistoryLogs_WithEntries(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	content := "2026-02-24 10:00:00 [INFO]: Installation terminée : KB5034441, KB5034442\n" +
 		"2026-02-24 10:01:00 [INFO]: Heartbeat\n"
@@ -643,9 +652,10 @@ func TestExportConfig_JSONRoundtrip(t *testing.T) {
 
 func TestPrintExtendedStatus_WithLogFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("log content"), 0644); err != nil {
 		t.Fatal(err)
@@ -676,9 +686,10 @@ func TestPrintExtendedStatus_WithLogFile(t *testing.T) {
 
 func TestPrintExtendedStatus_NoPanic(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	oldCfg := cfg
 	cfg = defaults()
@@ -710,9 +721,10 @@ func TestPrintExtendedStatus_NoPanic(t *testing.T) {
 
 func TestPrintExtendedStatus_WithStatusJSON(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Write a fake status.json
 	s := statusJSON{
@@ -792,9 +804,10 @@ func TestShowConfigJSON_ContainsNewFields(t *testing.T) {
 
 func TestHistoryLogs_SinceFilter(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	content := "2026-01-15 10:00:00 [INFO]: Installation terminée : KB1111\n" +
 		"2026-02-10 12:00:00 [INFO]: Installation terminée : KB2222\n" +
@@ -834,9 +847,10 @@ func TestHistoryLogs_SinceFilter(t *testing.T) {
 
 func TestHistoryLogs_SinceFilter_NoMatch(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	content := "2026-01-15 10:00:00 [INFO]: Installation terminée : KB1111\n"
 	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
@@ -865,9 +879,10 @@ func TestHistoryLogs_SinceFilter_NoMatch(t *testing.T) {
 
 func TestHistoryLogs_SinceFilter_InclusiveDate(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Entry exactly on the --since date must be INCLUDED
 	content := "2026-02-01 10:00:00 [INFO]: Installation terminée : KB9999\n"
@@ -897,9 +912,10 @@ func TestHistoryLogs_SinceFilter_InclusiveDate(t *testing.T) {
 
 func TestHistoryLogs_SinceInvalidDate(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	content := "2026-01-15 10:00:00 [INFO]: Installation terminée : KB1111\n"
 	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte(content), 0644); err != nil {
@@ -968,9 +984,10 @@ func TestCheckCommand_DifferentFromDryRun(t *testing.T) {
 
 func TestPrintExtendedStatus_NextCheck(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	oldCfg := cfg
 	cfg = defaults()
@@ -1069,9 +1086,10 @@ func TestPrintShowConfig_NonDefaultNoMarker(t *testing.T) {
 
 func TestPrintExtendedStatus_LastError(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	oldCfg := cfg
 	cfg = defaults()
@@ -1111,9 +1129,10 @@ func TestPrintExtendedStatus_LastError(t *testing.T) {
 
 func TestPrintExtendedStatus_NoLastError(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	oldCfg := cfg
 	cfg = defaults()
@@ -1152,9 +1171,10 @@ func TestPrintExtendedStatus_NoLastError(t *testing.T) {
 
 func TestCleanOldLogsDryRun_NoFiles(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	r, w, _ := os.Pipe()
 	oldOut := os.Stdout
@@ -1174,9 +1194,10 @@ func TestCleanOldLogsDryRun_NoFiles(t *testing.T) {
 
 func TestCleanOldLogsDryRun_ExpiredFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Create an archive with an old mod time
 	archivePath := filepath.Join(dir, "UpdateLog_2025-01-01T00-00-00.txt")
@@ -1210,9 +1231,10 @@ func TestCleanOldLogsDryRun_ExpiredFile(t *testing.T) {
 
 func TestPrintReport_NoStatusJSON(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// No status.json — uptime line must be absent, no panic
 	r, w, _ := os.Pipe()
@@ -1235,9 +1257,10 @@ func TestPrintReport_NoStatusJSON(t *testing.T) {
 
 func TestTailLogs_GrepMatch(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	content := "2026-02-24 10:00:00 [INFO]: Heartbeat\n" +
 		"2026-02-24 10:01:00 [ERROR]: execPS failed\n" +
@@ -1271,9 +1294,10 @@ func TestTailLogs_GrepMatch(t *testing.T) {
 
 func TestTailLogs_GrepNoMatch(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	if err := os.WriteFile(filepath.Join(dir, "UpdateLog.txt"), []byte("2026-02-24 [INFO]: all good\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -1303,9 +1327,10 @@ func TestTailLogs_GrepNoMatch(t *testing.T) {
 
 func TestPrintExtendedStatus_Version(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	oldCfg := cfg
 	cfg = defaults()

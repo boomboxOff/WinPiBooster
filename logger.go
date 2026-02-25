@@ -156,12 +156,7 @@ func (h *fileHook) Close() {
 // setupLogger initialises and returns a logrus.Logger writing to both
 // UpdateLog.txt (plain) and the console (coloured).
 func setupLogger() (*logrus.Logger, *fileHook, error) {
-	exePath, err := os.Executable()
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot find executable path: %w", err)
-	}
-	dir := filepath.Dir(exePath)
-	logPath := filepath.Join(dir, "UpdateLog.txt")
+	logPath := filepath.Join(logsDir, "UpdateLog.txt")
 
 	// Determine log level
 	level := logrus.InfoLevel

@@ -31,6 +31,7 @@ var (
 	log     *logrus.Logger
 	logHook *fileHook
 	logDir  string // directory of the executable
+	logsDir string // logs subdirectory (logDir/logs)
 	cfg     Config
 
 	// Counters (atomic) — reset by daily report
@@ -219,7 +220,7 @@ func showNotification(title, message string) {
 // ─── Log management ───────────────────────────────────────────────────────────
 
 func archiveOldLogs() {
-	logPath := filepath.Join(logDir, "UpdateLog.txt")
+	logPath := filepath.Join(logsDir, "UpdateLog.txt")
 	info, err := os.Stat(logPath)
 	if os.IsNotExist(err) {
 		return
@@ -229,7 +230,7 @@ func archiveOldLogs() {
 	}
 
 	ts := time.Now().Format("2006-01-02T15-04-05")
-	archivePath := filepath.Join(logDir, "UpdateLog_"+ts+".txt")
+	archivePath := filepath.Join(logsDir, "UpdateLog_"+ts+".txt")
 
 	// Close file hook before renaming
 	if logHook != nil {
@@ -270,7 +271,7 @@ func cleanOldLogsInternal(verbose, dryRun bool) {
 		days = 30
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
-	entries, err := os.ReadDir(logDir)
+	entries, err := os.ReadDir(logsDir)
 	if err != nil {
 		if log != nil {
 			log.Warnf("cleanOldLogs: cannot read dir: %v", err)
@@ -459,6 +460,10 @@ func initLogger() error {
 		return fmt.Errorf("cannot determine executable path: %w", err)
 	}
 	logDir = filepath.Dir(exePath)
+	logsDir = filepath.Join(logDir, "logs")
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return fmt.Errorf("cannot create logs directory: %w", err)
+	}
 
 	// Load config before logger so warnings can be logged
 	log, logHook, err = setupLogger()

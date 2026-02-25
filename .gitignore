@@ -1,6 +1,6 @@
 WinPiBooster.exe
 *.exe~
-UpdateLog*.txt
+logs/
 status.json
 config.json
 coverage.out

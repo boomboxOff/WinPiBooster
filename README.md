@@ -154,10 +154,19 @@ Créer `config.json` dans le même répertoire que `WinPiBooster.exe`. Toutes le
 
 ## Logs
 
-Les logs sont écrits dans `UpdateLog.txt` et archivés sous la forme `UpdateLog_<timestamp>.txt` :
+Les logs sont écrits dans le sous-dossier `logs\` créé automatiquement à côté de `WinPiBooster.exe` :
+
+```
+WinPiBooster\
+  logs\
+    UpdateLog.txt              ← log courant
+    UpdateLog_2026-02-24T...   ← archives horodatées
+```
+
+Le fichier `UpdateLog.txt` est archivé :
 - à chaque lancement
 - automatiquement à **minuit** (avant le rapport quotidien)
-- automatiquement quand `UpdateLog.txt` dépasse la taille limite (défaut 10 MB)
+- automatiquement quand il dépasse la taille limite (défaut 10 MB)
 
 Les archives de plus de 30 jours sont supprimées automatiquement.
 

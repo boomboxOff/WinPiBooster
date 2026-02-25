@@ -59,9 +59,10 @@ func TestUpdateComputer_Named(t *testing.T) {
 // ─── writeStatusJSON() ────────────────────────────────────────────────────────
 
 func TestWriteStatusJSON(t *testing.T) {
-	oldDir := logDir
+	oldDir, oldLogsDir := logDir, logsDir
 	logDir = t.TempDir()
-	defer func() { logDir = oldDir }()
+	logsDir = logDir
+	defer func() { logDir = oldDir; logsDir = oldLogsDir }()
 
 	atomic.StoreInt64(&updatesChecked, 10)
 	atomic.StoreInt64(&updatesInstalled, 3)
@@ -103,9 +104,10 @@ func TestWriteStatusJSON(t *testing.T) {
 }
 
 func TestWriteStatusJSON_NextCheck(t *testing.T) {
-	oldDir := logDir
+	oldDir, oldLogsDir := logDir, logsDir
 	logDir = t.TempDir()
-	defer func() { logDir = oldDir }()
+	logsDir = logDir
+	defer func() { logDir = oldDir; logsDir = oldLogsDir }()
 
 	oldCfg := cfg
 	cfg = defaults()
@@ -144,9 +146,10 @@ func TestWriteStatusJSON_NextCheck(t *testing.T) {
 // ─── uptime_seconds in status.json ────────────────────────────────────────────
 
 func TestWriteStatusJSON_UptimeSeconds(t *testing.T) {
-	oldDir := logDir
+	oldDir, oldLogsDir := logDir, logsDir
 	logDir = t.TempDir()
-	defer func() { logDir = oldDir }()
+	logsDir = logDir
+	defer func() { logDir = oldDir; logsDir = oldLogsDir }()
 
 	startTime = time.Now().Add(-5 * time.Second)
 	defer func() { startTime = time.Now() }()
@@ -170,9 +173,10 @@ func TestWriteStatusJSON_UptimeSeconds(t *testing.T) {
 
 func TestWriteStatusJSON_WritesFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	atomic.StoreInt64(&updatesChecked, 7)
 	atomic.StoreInt64(&updatesInstalled, 2)
@@ -203,9 +207,10 @@ func TestWriteStatusJSON_WritesFile(t *testing.T) {
 
 func TestWriteStatusJSON_LastError(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	setCycleError("execPS: exit status 1: Access denied")
 	defer clearCycleError()
@@ -227,9 +232,10 @@ func TestWriteStatusJSON_LastError(t *testing.T) {
 
 func TestWriteStatusJSON_ClearsLastError(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	setCycleError("some previous error")
 	clearCycleError()
@@ -326,9 +332,10 @@ func TestDryRunFlagDetection(t *testing.T) {
 
 func TestCleanOldLogsVerbose_RemovesOldArchives(t *testing.T) {
 	dir := t.TempDir()
-	oldDir := logDir
+	oldDir, oldLogsDir := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = oldDir }()
+	logsDir = dir
+	defer func() { logDir = oldDir; logsDir = oldLogsDir }()
 
 	// Create an old archive (40 days ago) and a recent one (1 day ago).
 	old := filepath.Join(dir, "UpdateLog_old.txt")
@@ -357,9 +364,10 @@ func TestCleanOldLogsVerbose_RemovesOldArchives(t *testing.T) {
 
 func TestCleanOldLogsVerbose_WithOutput(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Create an expired archive
 	oldFile := filepath.Join(dir, "UpdateLog_expired.txt")
@@ -389,9 +397,10 @@ func TestCleanOldLogsVerbose_WithOutput(t *testing.T) {
 
 func TestCleanOldLogsVerbose_RecentFileNotDeleted(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Recent archive (not expired)
 	recent := filepath.Join(dir, "UpdateLog_recent.txt")
@@ -408,9 +417,10 @@ func TestCleanOldLogsVerbose_RecentFileNotDeleted(t *testing.T) {
 
 func TestCleanOldLogsVerbose_NonMatchingFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// File that doesn't match UpdateLog_*.txt pattern
 	other := filepath.Join(dir, "otherfile.txt")
@@ -427,9 +437,10 @@ func TestCleanOldLogsVerbose_NonMatchingFile(t *testing.T) {
 
 func TestCleanOldLogsVerbose_WithLogger_DeletesExpired(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	oldFile := filepath.Join(dir, "UpdateLog_expired.txt")
 	if err := os.WriteFile(oldFile, []byte("old"), 0644); err != nil {
@@ -486,9 +497,10 @@ func TestRecordInstalled_CapAt10(t *testing.T) {
 }
 
 func TestWriteStatusJSON_IncludesLastInstalled(t *testing.T) {
-	oldDir := logDir
+	oldDir, oldLogsDir := logDir, logsDir
 	logDir = t.TempDir()
-	defer func() { logDir = oldDir }()
+	logsDir = logDir
+	defer func() { logDir = oldDir; logsDir = oldLogsDir }()
 
 	lastInstalledMu.Lock()
 	lastInstalled = []installEntry{{KB: "KB5034441", Title: "Security Update", InstalledAt: "2026-01-01T00:00:00Z"}}
@@ -521,9 +533,10 @@ func TestWriteStatusJSON_IncludesLastInstalled(t *testing.T) {
 
 func TestArchiveOldLogs_SkipsEmptyFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Create an empty UpdateLog.txt
 	logPath := filepath.Join(dir, "UpdateLog.txt")
@@ -548,9 +561,10 @@ func TestArchiveOldLogs_SkipsEmptyFile(t *testing.T) {
 
 func TestArchiveOldLogs_ArchivesNonEmptyFile(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	logPath := filepath.Join(dir, "UpdateLog.txt")
 	if err := os.WriteFile(logPath, []byte("some log content"), 0644); err != nil {
@@ -713,18 +727,20 @@ func TestRetryBackoff_SuccessOnSecond(t *testing.T) {
 
 func TestCleanOldLogs_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 	// Must not panic or return error
 	cleanOldLogs()
 }
 
 func TestCleanOldLogs_DeletesExpired(t *testing.T) {
 	dir := t.TempDir()
-	old := logDir
+	old, oldLogs := logDir, logsDir
 	logDir = dir
-	defer func() { logDir = old }()
+	logsDir = dir
+	defer func() { logDir = old; logsDir = oldLogs }()
 
 	// Write an old archive (modification time set to 60 days ago)
 	oldFile := filepath.Join(dir, "UpdateLog_old.txt")
